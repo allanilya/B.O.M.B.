@@ -1,89 +1,106 @@
 #include <Arduino.h>
-#include <GxEPD2_BW.h>
-#include "audio_test.h"
+#include "config.h"
+#include "time_manager.h"
+#include "display_manager.h"
 
-// Display pins (verified from schematic)
-#define EPD_CS    27
-#define EPD_DC    14
-#define EPD_RST   12
-#define EPD_BUSY  13
+// ============================================
+// Global Objects
+// ============================================
+TimeManager timeManager;
+DisplayManager displayManager;
 
-// I2S Audio pins (moved to avoid conflicts)
-#define I2S_DOUT  22  // SCL (GPIO 22)
-#define I2S_BCLK  25  // A18 (GPIO 25) - NO CONFLICT!
-#define I2S_LRC   26  // A19 (GPIO 26) - NO CONFLICT!
-
-// Create display object
-GxEPD2_BW<GxEPD2_370_GDEY037T03, GxEPD2_370_GDEY037T03::HEIGHT> display(
-    GxEPD2_370_GDEY037T03(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY)
-);
-
-// Create audio object
-AudioTest audio;
-
+// ============================================
+// Setup Function
+// ============================================
 void setup() {
-    Serial.begin(115200);
-    delay(2000);
+    // Initialize Serial communication
+    Serial.begin(SERIAL_BAUD);
+    delay(1000);
 
-    Serial.println("\n========================================");
-    Serial.println("DISPLAY + AUDIO - NO CONFLICTS!");
+    // Print startup banner
+    Serial.println("\n\n========================================");
+    Serial.println(PROJECT_NAME);
+    Serial.print("Version: ");
+    Serial.println(VERSION);
     Serial.println("========================================");
-    Serial.println("Display: CS=27, DC=14, RST=12, BUSY=13");
-    Serial.println("Audio: DOUT=22, BCLK=25, LRC=26");
-    Serial.println("SUCCESS: No pin conflicts!");
+    Serial.println("Phase 1: Display Clock Test");
     Serial.println("========================================\n");
 
-    // Test 1: Initialize Display
-    Serial.println("1. Initializing display...");
-    display.init(115200);
-    display.setRotation(1);
-    display.setTextColor(GxEPD_BLACK);
-    Serial.println("   Display OK\n");
-
-    // Test 2: Initialize Audio
-    Serial.println("2. Initializing audio...");
-    if (audio.begin()) {
-        Serial.println("   Audio OK\n");
+    // Initialize TimeManager
+    Serial.println("Initializing TimeManager...");
+    if (timeManager.begin()) {
+        Serial.println("TimeManager initialized!");
     } else {
-        Serial.println("   Audio FAILED\n");
+        Serial.println("ERROR: Failed to initialize TimeManager!");
     }
 
-    // Test 3: Update Display
-    Serial.println("3. Updating display...");
-    display.setFullWindow();
-    display.firstPage();
-    do {
-        display.fillScreen(GxEPD_WHITE);
-        display.setCursor(10, 30);
-        display.setTextSize(2);
-        display.print("Display Test");
-        display.setCursor(10, 70);
-        display.setTextSize(1);
-        display.print("Testing pin sharing");
-        display.print("Audio will play next");
-    } while (display.nextPage());
-    Serial.println("   Display updated!\n");
+    // Set initial time manually (for testing)
+    // TODO: In Phase 2, this will be replaced with BLE sync
+    Serial.println("\nSetting initial time...");
+    timeManager.setDate(14, 1, 2026);      // Jan 14, 2026 (Wednesday)
+    timeManager.setTime(12, 34, 0);        // 12:34:00
+    Serial.println("Time set to: 2026-01-14 12:34:00");
 
-    delay(1000);
+    // Initialize DisplayManager
+    Serial.println("\nInitializing DisplayManager...");
+    if (displayManager.begin()) {
+        Serial.println("DisplayManager initialized!");
+    } else {
+        Serial.println("ERROR: Failed to initialize DisplayManager!");
+    }
 
-    // Test 4: Play Audio Tone
-    Serial.println("4. Playing audio tone (440 Hz)...");
-    audio.playTone(440, 2000);  // A4 for 2 seconds
-    Serial.println("   Audio played!\n");
+    // Set status indicators
+    displayManager.setBLEStatus(false);    // No BLE yet
+    displayManager.setTimeSyncStatus(true); // Manually synced
 
+    // Display initial clock
+    Serial.println("\nDisplaying initial clock...");
+    displayManager.showClock(
+        timeManager.getTimeString(false),  // 24-hour format
+        timeManager.getDateString(),
+        timeManager.getDayOfWeekString()
+    );
+
+    Serial.println("\n========================================");
+    Serial.println("READY - Clock should be displayed!");
     Serial.println("========================================");
-    Serial.println("TEST COMPLETE!");
-    Serial.println("========================================");
-    Serial.println("Results:");
-    Serial.println("  1. Did display update? (check screen)");
-    Serial.println("  2. Did audio play? (check speaker)");
-    Serial.println("  3. Any crashes or errors?");
-    Serial.println("\nBoth should work now with new wiring!");
-    Serial.println("Display uses: T7, T6, T5, T4");
-    Serial.println("Audio uses: SCL, A18, A19");
-    Serial.println("========================================\n");
+    Serial.println("Expected on display:");
+    Serial.println("  - Day of week: Wednesday");
+    Serial.println("  - Time: 12:34");
+    Serial.println("  - Date: Jan 14, 2026");
+    Serial.println("  - BLE status: ---");
+    Serial.println("  - Sync status: SYNC");
+    Serial.println("\nClock will update every second...\n");
 }
 
+// ============================================
+// Loop Function
+// ============================================
 void loop() {
-    delay(1000);
+    static unsigned long lastUpdate = 0;
+    unsigned long now = millis();
+
+    // Update display every second
+    if (now - lastUpdate >= 1000) {
+        lastUpdate = now;
+
+        // Get current time
+        String timeStr = timeManager.getTimeString(false);  // 24-hour
+        String dateStr = timeManager.getDateString();
+        String dayStr = timeManager.getDayOfWeekString();
+
+        // Update display
+        displayManager.showClock(timeStr, dateStr, dayStr);
+
+        // Print to serial (for debugging)
+        Serial.print("Clock updated: ");
+        Serial.print(dayStr);
+        Serial.print(", ");
+        Serial.print(timeStr);
+        Serial.print(", ");
+        Serial.println(dateStr);
+    }
+
+    // Small delay to prevent overwhelming CPU
+    delay(10);
 }
