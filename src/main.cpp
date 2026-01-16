@@ -5,6 +5,7 @@
 #include "ble_time_sync.h"
 #include "alarm_manager.h"
 #include "button.h"
+#include "audio_test.h"
 
 // ============================================
 // Global Objects
@@ -14,6 +15,7 @@ DisplayManager displayManager;
 BLETimeSync bleSync;
 AlarmManager alarmManager;
 Button button(BUTTON_PIN);
+AudioTest audioObj;
 
 // ============================================
 // Setup Function
@@ -75,12 +77,40 @@ void setup() {
         Serial.print(">>> ALARM CALLBACK: Alarm ");
         Serial.print(alarmId);
         Serial.println(" is ringing!");
+
+        // Get alarm data to determine which sound to play
+        AlarmData alarm;
+        if (alarmManager.getAlarm(alarmId, alarm)) {
+            // Map sound name to frequency
+            uint16_t frequency;
+            if (alarm.sound == "tone2") {
+                frequency = 523;  // C5 note
+            } else if (alarm.sound == "tone3") {
+                frequency = 659;  // E5 note
+            } else {
+                frequency = 440;  // A4 note (default tone1)
+            }
+
+            // Play very short tone burst (non-blocking approach)
+            audioObj.playTone(frequency, 50);  // 50ms burst only
+            Serial.print(">>> AUDIO: Playing tone at ");
+            Serial.print(frequency);
+            Serial.println(" Hz (50ms burst)");
+        }
     });
 
     // Initialize Button
     Serial.println("\nInitializing Button...");
     button.begin();
     Serial.println("Button initialized!");
+
+    // Initialize Audio
+    Serial.println("\nInitializing Audio...");
+    if (audioObj.begin()) {
+        Serial.println("Audio initialized!");
+    } else {
+        Serial.println("ERROR: Failed to initialize Audio!");
+    }
 
     // Set initial status indicators
     displayManager.setBLEStatus(false);     // Will update when connected
@@ -122,6 +152,9 @@ void setup() {
 void loop() {
     static unsigned long lastUpdate = 0;
     static bool lastBLEStatus = false;
+    static unsigned long lastToneStart = 0;  // Track when tone was started
+    static bool wasRingingLastLoop = false;  // Track alarm state
+    static bool displayUpdatedForAlarm = false;  // Track if alarm display shown
     unsigned long now = millis();
 
     // Update BLE
@@ -147,21 +180,77 @@ void loop() {
     displayManager.setTimeSyncStatus(timeManager.isSynced());
 
     // Handle button presses for alarm control
+    bool buttonPressed = button.wasPressed();
+    bool buttonDoubleClicked = button.wasDoubleClicked();
+
+    // Debug: Log any button activity
+    if (buttonPressed) {
+        Serial.println("\n>>> BUTTON: Single press detected!");
+    }
+    if (buttonDoubleClicked) {
+        Serial.println("\n>>> BUTTON: Double-click detected!");
+    }
+
     if (alarmManager.isAlarmRinging()) {
         // Single click = snooze
-        if (button.wasPressed()) {
+        if (buttonPressed) {
             alarmManager.snoozeAlarm();
+            audioObj.stop();
+            lastToneStart = 0;  // Reset tone timer
             Serial.println("\n>>> BUTTON: Alarm snoozed (5 minutes)");
+            Serial.println(">>> AUDIO: Stopped");
         }
 
         // Double-click = dismiss
-        if (button.wasDoubleClicked()) {
+        if (buttonDoubleClicked) {
             alarmManager.dismissAlarm();
+            audioObj.stop();
+            lastToneStart = 0;  // Reset tone timer
             Serial.println("\n>>> BUTTON: Alarm dismissed");
+            Serial.println(">>> AUDIO: Stopped");
         }
     }
 
-    // Update display every second
+    // Handle alarm audio (runs every loop for responsiveness)
+    if (alarmManager.isAlarmRinging()) {
+        // If alarm just started, initialize timer and show alarm display
+        if (!wasRingingLastLoop) {
+            lastToneStart = 0;  // Force immediate play
+            wasRingingLastLoop = true;
+            displayUpdatedForAlarm = false;  // Need to show alarm screen
+
+            // Show alarm screen immediately (only once)
+            uint8_t hour, minute, second;
+            timeManager.getTime(hour, minute, second);
+            String timeStr = timeManager.getTimeString(true);
+            displayManager.showAlarmRinging(timeStr);
+            displayUpdatedForAlarm = true;
+        }
+
+        // Play tone bursts frequently for continuous sound
+        if (now - lastToneStart >= 60) {  // Restart every 60ms
+            uint8_t alarmId = alarmManager.getRingingAlarmId();
+            AlarmData alarm;
+            if (alarmManager.getAlarm(alarmId, alarm)) {
+                uint16_t frequency = (alarm.sound == "tone2") ? 523 :
+                                   (alarm.sound == "tone3") ? 659 : 440;
+                audioObj.playTone(frequency, 50);  // 50ms burst
+            }
+            lastToneStart = now;
+        }
+    } else {
+        // Reset state when alarm stops
+        if (wasRingingLastLoop) {
+            wasRingingLastLoop = false;
+            lastToneStart = 0;
+            displayUpdatedForAlarm = false;
+
+            // Force display update to return to clock
+            lastUpdate = 0;
+        }
+    }
+
+    // Update display every second (only for normal clock, not alarm screen)
     if (now - lastUpdate >= 1000) {
         lastUpdate = now;
 
@@ -178,10 +267,8 @@ void loop() {
         localtime_r(&now_t, &timeinfo);
         alarmManager.checkAlarms(hour, minute, timeinfo.tm_wday);
 
-        // Update display based on alarm state
-        if (alarmManager.isAlarmRinging()) {
-            displayManager.showAlarmRinging(timeStr);
-        } else {
+        // Only update display if not showing alarm (alarm display updates once above)
+        if (!alarmManager.isAlarmRinging()) {
             displayManager.showClock(timeStr, dateStr, dayStr, second);
         }
 
