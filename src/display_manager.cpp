@@ -173,13 +173,13 @@ void DisplayManager::showAlarmRinging(const String& timeStr) {
 
         // Instructions
         _display->setFont(&FreeMono9pt7b);
-        const char* instr1 = "Short press: Snooze 5 min";
+        const char* instr1 = "Single click: Snooze 5 min";
         _display->getTextBounds(instr1, 0, 0, &x1, &y1, &w, &h);
         int16_t instr1X = (_display->width() - w) / 2;
         _display->setCursor(instr1X, _display->height() - 50);
         _display->print(instr1);
 
-        const char* instr2 = "Long press: Dismiss";
+        const char* instr2 = "Double click: Dismiss";
         _display->getTextBounds(instr2, 0, 0, &x1, &y1, &w, &h);
         int16_t instr2X = (_display->width() - w) / 2;
         _display->setCursor(instr2X, _display->height() - 30);

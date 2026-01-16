@@ -53,11 +53,20 @@ public:
      */
     uint32_t getConnectionCount();
 
+    /**
+     * Update alarm list characteristic (call after alarm changes)
+     */
+    void updateAlarmList();
+
 private:
     BLEServer* _pServer;
     BLEService* _pTimeService;
+    BLEService* _pAlarmService;
     BLECharacteristic* _pTimeCharacteristic;
     BLECharacteristic* _pDateTimeCharacteristic;
+    BLECharacteristic* _pAlarmSetCharacteristic;
+    BLECharacteristic* _pAlarmListCharacteristic;
+    BLECharacteristic* _pAlarmDeleteCharacteristic;
     bool _deviceConnected;
     uint32_t _connectionCount;
     TimeSyncCallback _timeSyncCallback;
@@ -66,6 +75,10 @@ private:
     static const char* SERVICE_UUID;
     static const char* TIME_CHAR_UUID;
     static const char* DATETIME_CHAR_UUID;
+    static const char* ALARM_SERVICE_UUID;
+    static const char* ALARM_SET_CHAR_UUID;
+    static const char* ALARM_LIST_CHAR_UUID;
+    static const char* ALARM_DELETE_CHAR_UUID;
 
     // Server callbacks
     class ServerCallbacks : public BLEServerCallbacks {
@@ -90,6 +103,24 @@ private:
     class DateTimeCharCallbacks : public BLECharacteristicCallbacks {
     public:
         DateTimeCharCallbacks(BLETimeSync* parent) : _parent(parent) {}
+        void onWrite(BLECharacteristic* pCharacteristic);
+    private:
+        BLETimeSync* _parent;
+    };
+
+    // Alarm Set characteristic callbacks
+    class AlarmSetCharCallbacks : public BLECharacteristicCallbacks {
+    public:
+        AlarmSetCharCallbacks(BLETimeSync* parent) : _parent(parent) {}
+        void onWrite(BLECharacteristic* pCharacteristic);
+    private:
+        BLETimeSync* _parent;
+    };
+
+    // Alarm Delete characteristic callbacks
+    class AlarmDeleteCharCallbacks : public BLECharacteristicCallbacks {
+    public:
+        AlarmDeleteCharCallbacks(BLETimeSync* parent) : _parent(parent) {}
         void onWrite(BLECharacteristic* pCharacteristic);
     private:
         BLETimeSync* _parent;

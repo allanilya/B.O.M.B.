@@ -3,6 +3,8 @@
 #include "time_manager.h"
 #include "display_manager.h"
 #include "ble_time_sync.h"
+#include "alarm_manager.h"
+#include "button.h"
 
 // ============================================
 // Global Objects
@@ -10,6 +12,8 @@
 TimeManager timeManager;
 DisplayManager displayManager;
 BLETimeSync bleSync;
+AlarmManager alarmManager;
+Button button(BUTTON_PIN);
 
 // ============================================
 // Setup Function
@@ -58,6 +62,26 @@ void setup() {
         Serial.println(">>> Time synchronized from BLE!");
     });
 
+    // Initialize AlarmManager
+    Serial.println("\nInitializing AlarmManager...");
+    if (alarmManager.begin()) {
+        Serial.println("AlarmManager initialized!");
+    } else {
+        Serial.println("ERROR: Failed to initialize AlarmManager!");
+    }
+
+    // Set alarm callback
+    alarmManager.setAlarmCallback([](uint8_t alarmId) {
+        Serial.print(">>> ALARM CALLBACK: Alarm ");
+        Serial.print(alarmId);
+        Serial.println(" is ringing!");
+    });
+
+    // Initialize Button
+    Serial.println("\nInitializing Button...");
+    button.begin();
+    Serial.println("Button initialized!");
+
     // Set initial status indicators
     displayManager.setBLEStatus(false);     // Will update when connected
     displayManager.setTimeSyncStatus(false); // Not synced yet
@@ -103,6 +127,9 @@ void loop() {
     // Update BLE
     bleSync.update();
 
+    // Update button
+    button.update();
+
     // Check if BLE connection status changed
     bool bleConnected = bleSync.isConnected();
     if (bleConnected != lastBLEStatus) {
@@ -119,6 +146,21 @@ void loop() {
     // Update time sync status
     displayManager.setTimeSyncStatus(timeManager.isSynced());
 
+    // Handle button presses for alarm control
+    if (alarmManager.isAlarmRinging()) {
+        // Single click = snooze
+        if (button.wasPressed()) {
+            alarmManager.snoozeAlarm();
+            Serial.println("\n>>> BUTTON: Alarm snoozed (5 minutes)");
+        }
+
+        // Double-click = dismiss
+        if (button.wasDoubleClicked()) {
+            alarmManager.dismissAlarm();
+            Serial.println("\n>>> BUTTON: Alarm dismissed");
+        }
+    }
+
     // Update display every second
     if (now - lastUpdate >= 1000) {
         lastUpdate = now;
@@ -130,8 +172,18 @@ void loop() {
         String dateStr = timeManager.getDateString();
         String dayStr = timeManager.getDayOfWeekString();
 
-        // Update display
-        displayManager.showClock(timeStr, dateStr, dayStr, second);
+        // Check alarms (gets day of week from tm struct)
+        struct tm timeinfo;
+        time_t now_t = time(nullptr);
+        localtime_r(&now_t, &timeinfo);
+        alarmManager.checkAlarms(hour, minute, timeinfo.tm_wday);
+
+        // Update display based on alarm state
+        if (alarmManager.isAlarmRinging()) {
+            displayManager.showAlarmRinging(timeStr);
+        } else {
+            displayManager.showClock(timeStr, dateStr, dayStr, second);
+        }
 
         // Print to serial (for debugging)
         Serial.print("Clock: ");
@@ -139,7 +191,9 @@ void loop() {
         Serial.print(" | BLE: ");
         Serial.print(bleConnected ? "Connected" : "---");
         Serial.print(" | Sync: ");
-        Serial.println(timeManager.isSynced() ? "YES" : "NO");
+        Serial.print(timeManager.isSynced() ? "YES" : "NO");
+        Serial.print(" | Alarm: ");
+        Serial.println(alarmManager.isAlarmRinging() ? "RINGING" : "---");
     }
 
     // Small delay to prevent overwhelming CPU
