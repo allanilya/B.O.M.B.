@@ -201,7 +201,7 @@ class BLEManager: NSObject, ObservableObject {
             return
         }
 
-        connectedPeripheral?.writeValue(data, for: characteristic, type: .withoutResponse)
+        connectedPeripheral?.writeValue(data, for: characteristic, type: .withResponse)
         print("BLEManager: Set alarm \(alarm.id): \(alarm.timeString)")
 
         // Refresh alarm list after setting
@@ -228,7 +228,7 @@ class BLEManager: NSObject, ObservableObject {
             return
         }
 
-        connectedPeripheral?.writeValue(data, for: characteristic, type: .withoutResponse)
+        connectedPeripheral?.writeValue(data, for: characteristic, type: .withResponse)
         print("BLEManager: Deleted alarm \(id)")
 
         // Refresh alarm list after deleting
@@ -393,10 +393,15 @@ extension BLEManager: CBPeripheralDelegate {
         print("BLEManager: Discovered \(services.count) services")
 
         for service in services {
+            print("BLEManager: Service UUID: \(service.uuid)")
             if service.uuid == timeServiceUUID {
+                print("BLEManager: Discovering Time service characteristics...")
                 peripheral.discoverCharacteristics([timeCharUUID, dateTimeCharUUID], for: service)
             } else if service.uuid == alarmServiceUUID {
+                print("BLEManager: Discovering Alarm service characteristics...")
                 peripheral.discoverCharacteristics([alarmSetCharUUID, alarmListCharUUID, alarmDeleteCharUUID], for: service)
+            } else {
+                print("BLEManager: Unknown service UUID: \(service.uuid)")
             }
         }
     }

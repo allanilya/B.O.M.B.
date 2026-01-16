@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <Preferences.h>
 #include <vector>
+#include "config.h"
 
 /**
  * AlarmData - Single alarm configuration
@@ -112,7 +113,6 @@ public:
     void setAlarmCallback(AlarmCallback callback);
 
 private:
-    static const uint8_t MAX_ALARMS = 10;
     static const uint8_t SNOOZE_MINUTES = 5;
 
     Preferences _prefs;
