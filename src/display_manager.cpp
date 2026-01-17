@@ -9,6 +9,7 @@ DisplayManager::DisplayManager()
       _initialized(false),
       _bleConnected(false),
       _timeSynced(false),
+      _alarmStatus(""),
       _lastFullRefresh(0),
       _forceFullRefresh(false),
       _lastTimeStr("") {
@@ -196,6 +197,10 @@ void DisplayManager::setTimeSyncStatus(bool synced) {
     _timeSynced = synced;
 }
 
+void DisplayManager::setAlarmStatus(const String& status) {
+    _alarmStatus = status;
+}
+
 void DisplayManager::forceFullRefresh() {
     _forceFullRefresh = true;
 }
@@ -210,11 +215,11 @@ void DisplayManager::drawStatusIcons() {
         _display->print("---");
     }
 
-    // Draw sync status icon (top right)
-    _display->setCursor(_display->width() - 60, 25);
-    if (_timeSynced) {
-        _display->print("SYNC");
+    // Draw alarm status icon (top right) - replaces sync indicator
+    _display->setCursor(_display->width() - 80, 25);
+    if (_alarmStatus.length() > 0) {
+        _display->print(_alarmStatus);  // "ALARM" or "SNOOZE"
     } else {
-        _display->print("????");
+        _display->print("     ");  // Empty space if no alarm
     }
 }

@@ -1,13 +1,17 @@
 #include "ble_time_sync.h"
 #include "alarm_manager.h"
+#include "audio_test.h"
 
-// External reference to alarm manager
+// External references
 extern AlarmManager alarmManager;
+extern AudioTest audioObj;
 
 // BLE Service UUID: Custom time sync service
 const char* BLETimeSync::SERVICE_UUID = "12340000-1234-5678-1234-56789abcdef0";
 const char* BLETimeSync::TIME_CHAR_UUID = "12340001-1234-5678-1234-56789abcdef0";
 const char* BLETimeSync::DATETIME_CHAR_UUID = "12340002-1234-5678-1234-56789abcdef0";
+const char* BLETimeSync::VOLUME_CHAR_UUID = "12340003-1234-5678-1234-56789abcdef0";
+const char* BLETimeSync::TEST_SOUND_CHAR_UUID = "12340004-1234-5678-1234-56789abcdef0";
 
 // BLE Alarm Service UUID: Custom alarm management service
 const char* BLETimeSync::ALARM_SERVICE_UUID = "12340010-1234-5678-1234-56789abcdef0";
@@ -21,6 +25,8 @@ BLETimeSync::BLETimeSync()
       _pAlarmService(nullptr),
       _pTimeCharacteristic(nullptr),
       _pDateTimeCharacteristic(nullptr),
+      _pVolumeCharacteristic(nullptr),
+      _pTestSoundCharacteristic(nullptr),
       _pAlarmSetCharacteristic(nullptr),
       _pAlarmListCharacteristic(nullptr),
       _pAlarmDeleteCharacteristic(nullptr),
@@ -57,6 +63,23 @@ bool BLETimeSync::begin(const char* deviceName) {
     );
     _pDateTimeCharacteristic->setCallbacks(new DateTimeCharCallbacks(this));
     _pDateTimeCharacteristic->addDescriptor(new BLE2902());
+
+    // Create Volume Characteristic (0-100%)
+    _pVolumeCharacteristic = _pTimeService->createCharacteristic(
+        VOLUME_CHAR_UUID,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE
+    );
+    _pVolumeCharacteristic->setCallbacks(new VolumeCharCallbacks(this));
+    _pVolumeCharacteristic->addDescriptor(new BLE2902());
+    uint32_t initialVolume = (uint32_t)audioObj.getVolume();
+    _pVolumeCharacteristic->setValue(initialVolume);
+
+    // Create Test Sound Characteristic (Write to trigger 2-second test tone)
+    _pTestSoundCharacteristic = _pTimeService->createCharacteristic(
+        TEST_SOUND_CHAR_UUID,
+        BLECharacteristic::PROPERTY_WRITE
+    );
+    _pTestSoundCharacteristic->setCallbacks(new TestSoundCharCallbacks(this));
 
     // Set initial value
     time_t currentTime = time(nullptr);
@@ -348,4 +371,61 @@ void BLETimeSync::AlarmDeleteCharCallbacks::onWrite(BLECharacteristic* pCharacte
             Serial.println("BLE: ERROR - Failed to delete alarm!");
         }
     }
+}
+
+// ============================================
+// Volume Characteristic Callbacks
+// ============================================
+
+void BLETimeSync::VolumeCharCallbacks::onWrite(BLECharacteristic* pCharacteristic) {
+    std::string value = pCharacteristic->getValue();
+
+    if (value.length() > 0) {
+        uint8_t volume = (uint8_t)value[0];
+
+        if (volume <= 100) {
+            audioObj.setVolume(volume);
+            Serial.print("\n>>> BLE: Volume set to ");
+            Serial.print(volume);
+            Serial.println("%");
+        } else {
+            Serial.println("\n>>> BLE: ERROR - Invalid volume (must be 0-100)");
+        }
+    }
+}
+
+// ============================================
+// Test Sound Characteristic Callbacks
+// ============================================
+
+void BLETimeSync::TestSoundCharCallbacks::onWrite(BLECharacteristic* pCharacteristic) {
+    std::string value = pCharacteristic->getValue();
+    String soundName = String(value.c_str());
+
+    // Check for stop command
+    if (soundName == "stop") {
+        audioObj.stop();
+        Serial.println("\n>>> BLE: Test sound stopped");
+        return;
+    }
+
+    // Parse sound name: "tone1", "tone2", "tone3"
+    // Use very distinct frequencies for easy differentiation
+    uint16_t frequency = 262;  // Default tone1 - C4 (low)
+
+    if (soundName == "tone2") {
+        frequency = 440;  // A4 note (middle)
+    } else if (soundName == "tone3") {
+        frequency = 880;  // A5 note (high) - octave above tone2
+    } else {
+        frequency = 262;  // C4 note (tone1 or default) - low
+    }
+
+    Serial.print("\n>>> BLE: Playing test sound '");
+    Serial.print(soundName);
+    Serial.print("' (");
+    Serial.print(frequency);
+    Serial.println(" Hz for 2 seconds)");
+
+    audioObj.playTone(frequency, 2000);
 }

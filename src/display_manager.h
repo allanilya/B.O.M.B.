@@ -49,6 +49,12 @@ public:
     void setTimeSyncStatus(bool synced);
 
     /**
+     * Set alarm status (replaces sync indicator)
+     * @param status "ALARM" if alarm set, "SNOOZE" if snoozed, "" if none
+     */
+    void setAlarmStatus(const String& status);
+
+    /**
      * Force a full refresh on next update
      */
     void forceFullRefresh();
@@ -58,6 +64,7 @@ private:
     bool _initialized;
     bool _bleConnected;
     bool _timeSynced;
+    String _alarmStatus;  // "ALARM", "SNOOZE", or ""
     unsigned long _lastFullRefresh;
     bool _forceFullRefresh;
     String _lastTimeStr;

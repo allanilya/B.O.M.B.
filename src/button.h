@@ -74,7 +74,7 @@ public:
      * @param timeoutMs Maximum time between clicks (default: 500ms)
      * @return true if double-click detected
      */
-    bool wasDoubleClicked(unsigned long timeoutMs = 500);
+    bool wasDoubleClicked(unsigned long timeoutMs = 700);
 
     /**
      * Reset button state

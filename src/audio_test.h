@@ -31,8 +31,21 @@ public:
      */
     void stop();
 
+    /**
+     * Set volume level (0-100%)
+     * @param volume Volume level 0-100
+     */
+    void setVolume(uint8_t volume);
+
+    /**
+     * Get current volume level
+     * @return Current volume (0-100%)
+     */
+    uint8_t getVolume();
+
 private:
     bool _initialized;
+    uint8_t _volume;  // Volume level 0-100 (default: 70)
     static const i2s_port_t I2S_PORT = I2S_NUM_0;
     static const uint32_t SAMPLE_RATE = 44100;
 

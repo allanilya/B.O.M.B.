@@ -1,10 +1,11 @@
 #include "audio_test.h"
 #include <math.h>
+#include <Preferences.h>
 
 /**
  * Constructor
  */
-AudioTest::AudioTest() : _initialized(false) {
+AudioTest::AudioTest() : _initialized(false), _volume(70) {
 }
 
 /**
@@ -52,8 +53,16 @@ bool AudioTest::begin() {
 
     i2s_zero_dma_buffer(I2S_PORT);
 
+    // Load volume from NVS
+    Preferences prefs;
+    prefs.begin("audio", false);
+    _volume = prefs.getUChar("volume", 70);  // Default 70%
+    prefs.end();
+
     _initialized = true;
-    Serial.println("I2S initialized successfully!");
+    Serial.print("I2S initialized successfully! Volume: ");
+    Serial.print(_volume);
+    Serial.println("%");
     return true;
 }
 
@@ -61,7 +70,8 @@ bool AudioTest::begin() {
  * Generate sine wave samples
  */
 void AudioTest::generateSineWave(int16_t* buffer, size_t bufferSize, uint16_t frequency, float& phase) {
-    const float amplitude = 20000.0;  // High volume for testing (max is 32767)
+    // Dynamic amplitude based on volume (0-100) -> (0-32767)
+    const float amplitude = (_volume / 100.0) * 32767.0;
     const float phaseIncrement = 2.0 * PI * frequency / SAMPLE_RATE;
 
     for (size_t i = 0; i < bufferSize; i += 2) {
@@ -117,13 +127,39 @@ void AudioTest::playTone(uint16_t frequency, uint32_t duration) {
 }
 
 /**
- * Stop audio output
+ * Stop audio output (just clear the buffer, keep driver running)
  */
 void AudioTest::stop() {
     if (_initialized) {
         i2s_zero_dma_buffer(I2S_PORT);
-        i2s_driver_uninstall(I2S_PORT);
-        _initialized = false;
-        Serial.println("Audio stopped and driver uninstalled.");
+        Serial.println("Audio stopped (buffer cleared).");
     }
+}
+
+/**
+ * Set volume level (0-100%)
+ */
+void AudioTest::setVolume(uint8_t volume) {
+    if (volume > 100) {
+        volume = 100;
+    }
+
+    _volume = volume;
+
+    // Save to NVS
+    Preferences prefs;
+    prefs.begin("audio", false);
+    prefs.putUChar("volume", _volume);
+    prefs.end();
+
+    Serial.print("Volume set to: ");
+    Serial.print(_volume);
+    Serial.println("%");
+}
+
+/**
+ * Get current volume level
+ */
+uint8_t AudioTest::getVolume() {
+    return _volume;
 }

@@ -101,6 +101,10 @@ struct AlarmEditView: View {
             } message: {
                 Text(errorMessage)
             }
+            .onDisappear {
+                // Stop any playing sound when leaving the screen
+                bleManager.stopTestSound()
+            }
         }
     }
 
@@ -199,16 +203,62 @@ struct AlarmEditView: View {
     // MARK: - Sound Picker
 
     private var soundPicker: some View {
-        Picker("Sound", selection: $sound) {
-            ForEach(availableSounds, id: \.self) { soundName in
-                HStack {
-                    Image(systemName: "speaker.wave.2.fill")
-                    Text(soundName.capitalized)
+        ForEach(availableSounds, id: \.self) { soundName in
+            HStack {
+                Button(action: {
+                    sound = soundName
+                    previewSound(soundName)
+                }) {
+                    HStack {
+                        Image(systemName: sound == soundName ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(sound == soundName ? .blue : .gray)
+
+                        Image(systemName: "speaker.wave.2.fill")
+                            .foregroundColor(.secondary)
+
+                        Text(soundName.capitalized)
+                            .foregroundColor(.primary)
+
+                        Spacer()
+
+                        Image(systemName: "play.circle")
+                            .foregroundColor(.blue)
+                    }
                 }
-                .tag(soundName)
+                .buttonStyle(.plain)
             }
         }
-        .pickerStyle(.inline)
+    }
+
+    private func previewSound(_ soundName: String) {
+        // Play on ESP32 if connected, otherwise play on iPhone
+        if bleManager.isConnected {
+            bleManager.testSound(soundName: soundName)
+        } else {
+            playLocalPreview(soundName)
+        }
+    }
+
+    private func playLocalPreview(_ soundName: String) {
+        // Map sound names to frequencies
+        let frequency: Double
+        switch soundName {
+        case "tone1":
+            frequency = 262  // C4 (low)
+        case "tone2":
+            frequency = 440  // A4 (middle)
+        case "tone3":
+            frequency = 880  // A5 (high)
+        default:
+            frequency = 440
+        }
+
+        // Play tone on iPhone using System Sound
+        // For now, just log - full implementation would use AVAudioEngine
+        print("Playing local preview: \(soundName) at \(frequency)Hz")
+
+        // TODO: Implement local audio playback with AVAudioEngine
+        // This would require generating sine wave samples and playing through AVAudioEngine
     }
 
     // MARK: - Validation

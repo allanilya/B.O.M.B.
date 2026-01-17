@@ -64,6 +64,8 @@ private:
     BLEService* _pAlarmService;
     BLECharacteristic* _pTimeCharacteristic;
     BLECharacteristic* _pDateTimeCharacteristic;
+    BLECharacteristic* _pVolumeCharacteristic;
+    BLECharacteristic* _pTestSoundCharacteristic;
     BLECharacteristic* _pAlarmSetCharacteristic;
     BLECharacteristic* _pAlarmListCharacteristic;
     BLECharacteristic* _pAlarmDeleteCharacteristic;
@@ -75,6 +77,8 @@ private:
     static const char* SERVICE_UUID;
     static const char* TIME_CHAR_UUID;
     static const char* DATETIME_CHAR_UUID;
+    static const char* VOLUME_CHAR_UUID;
+    static const char* TEST_SOUND_CHAR_UUID;
     static const char* ALARM_SERVICE_UUID;
     static const char* ALARM_SET_CHAR_UUID;
     static const char* ALARM_LIST_CHAR_UUID;
@@ -121,6 +125,24 @@ private:
     class AlarmDeleteCharCallbacks : public BLECharacteristicCallbacks {
     public:
         AlarmDeleteCharCallbacks(BLETimeSync* parent) : _parent(parent) {}
+        void onWrite(BLECharacteristic* pCharacteristic);
+    private:
+        BLETimeSync* _parent;
+    };
+
+    // Volume characteristic callbacks
+    class VolumeCharCallbacks : public BLECharacteristicCallbacks {
+    public:
+        VolumeCharCallbacks(BLETimeSync* parent) : _parent(parent) {}
+        void onWrite(BLECharacteristic* pCharacteristic);
+    private:
+        BLETimeSync* _parent;
+    };
+
+    // Test Sound characteristic callbacks
+    class TestSoundCharCallbacks : public BLECharacteristicCallbacks {
+    public:
+        TestSoundCharCallbacks(BLETimeSync* parent) : _parent(parent) {}
         void onWrite(BLECharacteristic* pCharacteristic);
     private:
         BLETimeSync* _parent;

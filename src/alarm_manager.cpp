@@ -172,13 +172,12 @@ void AlarmManager::snoozeAlarm() {
 }
 
 void AlarmManager::dismissAlarm() {
-    if (!_alarmRinging && !_snoozed) return;
-
+    // Always clear both ringing and snooze states
     _alarmRinging = false;
     _snoozed = false;
     _ringingAlarmId = 255;
 
-    Serial.println("AlarmManager: Alarm dismissed");
+    Serial.println("AlarmManager: Alarm dismissed (cleared ringing + snooze)");
 }
 
 bool AlarmManager::isAlarmRinging() {
@@ -202,6 +201,19 @@ String AlarmManager::getRingingAlarmSound() {
 
 void AlarmManager::setAlarmCallback(AlarmCallback callback) {
     _alarmCallback = callback;
+}
+
+bool AlarmManager::isAlarmSnoozed() {
+    return _snoozed;
+}
+
+bool AlarmManager::hasEnabledAlarm() {
+    for (const auto& alarm : _alarms) {
+        if (alarm.enabled) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // ============================================

@@ -81,14 +81,14 @@ void setup() {
         // Get alarm data to determine which sound to play
         AlarmData alarm;
         if (alarmManager.getAlarm(alarmId, alarm)) {
-            // Map sound name to frequency
+            // Map sound name to frequency - use distinct tones
             uint16_t frequency;
             if (alarm.sound == "tone2") {
-                frequency = 523;  // C5 note
+                frequency = 440;  // A4 note (middle)
             } else if (alarm.sound == "tone3") {
-                frequency = 659;  // E5 note
+                frequency = 880;  // A5 note (high)
             } else {
-                frequency = 440;  // A4 note (default tone1)
+                frequency = 262;  // C4 note (low, default tone1)
             }
 
             // Play very short tone burst (non-blocking approach)
@@ -179,36 +179,36 @@ void loop() {
     // Update time sync status
     displayManager.setTimeSyncStatus(timeManager.isSynced());
 
+    // Update alarm status display (replaces sync indicator)
+    if (alarmManager.isAlarmSnoozed()) {
+        displayManager.setAlarmStatus("SNOOZE");
+    } else if (alarmManager.hasEnabledAlarm()) {
+        displayManager.setAlarmStatus("ALARM");
+    } else {
+        displayManager.setAlarmStatus("");
+    }
+
     // Handle button presses for alarm control
-    bool buttonPressed = button.wasPressed();
-    bool buttonDoubleClicked = button.wasDoubleClicked();
-
-    // Debug: Log any button activity
-    if (buttonPressed) {
-        Serial.println("\n>>> BUTTON: Single press detected!");
-    }
-    if (buttonDoubleClicked) {
-        Serial.println("\n>>> BUTTON: Double-click detected!");
-    }
-
-    if (alarmManager.isAlarmRinging()) {
-        // Single click = snooze
-        if (buttonPressed) {
-            alarmManager.snoozeAlarm();
-            audioObj.stop();
-            lastToneStart = 0;  // Reset tone timer
-            Serial.println("\n>>> BUTTON: Alarm snoozed (5 minutes)");
-            Serial.println(">>> AUDIO: Stopped");
-        }
-
-        // Double-click = dismiss
-        if (buttonDoubleClicked) {
+    // CRITICAL: Check double-click for BOTH ringing and snoozed alarms
+    if (button.wasDoubleClicked()) {
+        // Double-click ALWAYS dismisses alarm (whether ringing or snoozed)
+        if (alarmManager.isAlarmRinging() || alarmManager.isAlarmSnoozed()) {
             alarmManager.dismissAlarm();
             audioObj.stop();
-            lastToneStart = 0;  // Reset tone timer
-            Serial.println("\n>>> BUTTON: Alarm dismissed");
+            lastToneStart = 0;
+            Serial.println("\n>>> BUTTON: ===== ALARM DISMISSED (double-click) =====");
             Serial.println(">>> AUDIO: Stopped");
+            // Consume any pending single press flag
+            button.wasPressed();
         }
+    }
+    else if (alarmManager.isAlarmRinging() && button.wasPressed()) {
+        // Single press ONLY works when alarm is actively ringing (not snoozed)
+        alarmManager.snoozeAlarm();
+        audioObj.stop();
+        lastToneStart = 0;
+        Serial.println("\n>>> BUTTON: Alarm snoozed for 5 minutes (single press)");
+        Serial.println(">>> AUDIO: Stopped");
     }
 
     // Handle alarm audio (runs every loop for responsiveness)
@@ -232,8 +232,9 @@ void loop() {
             uint8_t alarmId = alarmManager.getRingingAlarmId();
             AlarmData alarm;
             if (alarmManager.getAlarm(alarmId, alarm)) {
-                uint16_t frequency = (alarm.sound == "tone2") ? 523 :
-                                   (alarm.sound == "tone3") ? 659 : 440;
+                // Use distinct frequencies: low (262), middle (440), high (880)
+                uint16_t frequency = (alarm.sound == "tone2") ? 440 :
+                                   (alarm.sound == "tone3") ? 880 : 262;
                 audioObj.playTone(frequency, 50);  // 50ms burst
             }
             lastToneStart = now;

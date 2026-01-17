@@ -21,6 +21,12 @@ struct ContentView: View {
                 .tabItem {
                     Label("Time Sync", systemImage: "clock.arrow.circlepath")
                 }
+
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gear")
+                }
+                .environmentObject(bleManager)
         }
     }
 }

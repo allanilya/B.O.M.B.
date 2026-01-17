@@ -180,6 +180,17 @@ struct AlarmRow: View {
 
             Spacer()
 
+            // Test Sound Button
+            Button(action: {
+                bleManager.testSound(soundName: alarm.sound)
+            }) {
+                Image(systemName: "speaker.wave.2.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(bleManager.isConnected ? .blue : .gray)
+            }
+            .buttonStyle(.plain)
+            .disabled(!bleManager.isConnected)
+
             // Enable/Disable Toggle
             Toggle("", isOn: Binding(
                 get: { alarm.enabled },

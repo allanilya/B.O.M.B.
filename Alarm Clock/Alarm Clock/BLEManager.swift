@@ -40,6 +40,9 @@ class BLEManager: NSObject, ObservableObject {
     private let timeCharUUID = CBUUID(string: "12340001-1234-5678-1234-56789abcdef0")
     private let dateTimeCharUUID = CBUUID(string: "12340002-1234-5678-1234-56789abcdef0")
 
+    private let volumeCharUUID = CBUUID(string: "12340003-1234-5678-1234-56789abcdef0")
+    private let testSoundCharUUID = CBUUID(string: "12340004-1234-5678-1234-56789abcdef0")
+
     private let alarmServiceUUID = CBUUID(string: "12340010-1234-5678-1234-56789abcdef0")
     private let alarmSetCharUUID = CBUUID(string: "12340011-1234-5678-1234-56789abcdef0")
     private let alarmListCharUUID = CBUUID(string: "12340012-1234-5678-1234-56789abcdef0")
@@ -53,9 +56,14 @@ class BLEManager: NSObject, ObservableObject {
     // Characteristics
     private var timeCharacteristic: CBCharacteristic?
     private var dateTimeCharacteristic: CBCharacteristic?
+    private var volumeCharacteristic: CBCharacteristic?
+    private var testSoundCharacteristic: CBCharacteristic?
     private var alarmSetCharacteristic: CBCharacteristic?
     private var alarmListCharacteristic: CBCharacteristic?
     private var alarmDeleteCharacteristic: CBCharacteristic?
+
+    // Volume tracking
+    private var currentVolume: Int = 70
 
     // Auto-reconnect
     private var shouldAutoReconnect = true
@@ -237,6 +245,71 @@ class BLEManager: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Volume Control
+
+    /// Set volume on ESP32 (0-100%)
+    func setVolume(_ volume: Int) {
+        guard let characteristic = volumeCharacteristic else {
+            lastError = "Volume characteristic not found"
+            return
+        }
+
+        guard volume >= 0 && volume <= 100 else {
+            lastError = "Invalid volume (must be 0-100)"
+            return
+        }
+
+        let data = Data([UInt8(volume)])
+        connectedPeripheral?.writeValue(data, for: characteristic, type: .withResponse)
+        currentVolume = volume
+        print("BLEManager: Set volume to \(volume)%")
+    }
+
+    /// Get current volume level
+    func getCurrentVolume() -> Int {
+        return currentVolume
+    }
+
+    /// Trigger test sound on ESP32
+    func testSound() {
+        testSound(soundName: "tone1")  // Default to tone1
+    }
+
+    /// Trigger test sound with specific sound name (tone1, tone2, tone3)
+    func testSound(soundName: String) {
+        guard let characteristic = testSoundCharacteristic else {
+            lastError = "TestSound characteristic not found"
+            return
+        }
+
+        // First stop any ongoing sound by sending empty string
+        if let stopData = "stop".data(using: .utf8) {
+            connectedPeripheral?.writeValue(stopData, for: characteristic, type: .withoutResponse)
+        }
+
+        // Small delay to ensure stop command is processed
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            guard let self = self else { return }
+            guard let data = soundName.data(using: .utf8) else {
+                self.lastError = "Failed to encode sound name"
+                return
+            }
+
+            self.connectedPeripheral?.writeValue(data, for: characteristic, type: .withResponse)
+            print("BLEManager: Triggered test sound '\(soundName)' on ESP32")
+        }
+    }
+
+    /// Stop any currently playing test sound
+    func stopTestSound() {
+        guard let characteristic = testSoundCharacteristic else { return }
+
+        if let stopData = "stop".data(using: .utf8) {
+            connectedPeripheral?.writeValue(stopData, for: characteristic, type: .withoutResponse)
+            print("BLEManager: Stopped test sound on ESP32")
+        }
+    }
+
     // MARK: - Helper Methods
 
     private func parseAlarmList(from data: Data) {
@@ -396,7 +469,7 @@ extension BLEManager: CBPeripheralDelegate {
             print("BLEManager: Service UUID: \(service.uuid)")
             if service.uuid == timeServiceUUID {
                 print("BLEManager: Discovering Time service characteristics...")
-                peripheral.discoverCharacteristics([timeCharUUID, dateTimeCharUUID], for: service)
+                peripheral.discoverCharacteristics([timeCharUUID, dateTimeCharUUID, volumeCharUUID, testSoundCharUUID], for: service)
             } else if service.uuid == alarmServiceUUID {
                 print("BLEManager: Discovering Alarm service characteristics...")
                 peripheral.discoverCharacteristics([alarmSetCharUUID, alarmListCharUUID, alarmDeleteCharUUID], for: service)
@@ -423,6 +496,14 @@ extension BLEManager: CBPeripheralDelegate {
             } else if characteristic.uuid == dateTimeCharUUID {
                 dateTimeCharacteristic = characteristic
                 print("BLEManager: Found DateTime characteristic")
+            } else if characteristic.uuid == volumeCharUUID {
+                volumeCharacteristic = characteristic
+                print("BLEManager: Found Volume characteristic")
+                // Read current volume
+                peripheral.readValue(for: characteristic)
+            } else if characteristic.uuid == testSoundCharUUID {
+                testSoundCharacteristic = characteristic
+                print("BLEManager: Found TestSound characteristic")
             } else if characteristic.uuid == alarmSetCharUUID {
                 alarmSetCharacteristic = characteristic
                 print("BLEManager: Found AlarmSet characteristic")
@@ -437,6 +518,7 @@ extension BLEManager: CBPeripheralDelegate {
 
         // Check if all characteristics are discovered
         if timeCharacteristic != nil && dateTimeCharacteristic != nil &&
+           volumeCharacteristic != nil && testSoundCharacteristic != nil &&
            alarmSetCharacteristic != nil && alarmListCharacteristic != nil &&
            alarmDeleteCharacteristic != nil {
 
@@ -454,6 +536,15 @@ extension BLEManager: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         if let error = error {
             print("BLEManager: Error reading characteristic - \(error.localizedDescription)")
+            return
+        }
+
+        // Handle volume characteristic read
+        if characteristic.uuid == volumeCharUUID {
+            if let data = characteristic.value, let vol = data.first {
+                currentVolume = Int(vol)
+                print("BLEManager: Read volume from ESP32: \(currentVolume)%")
+            }
             return
         }
 

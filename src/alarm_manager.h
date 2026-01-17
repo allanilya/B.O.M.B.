@@ -112,6 +112,18 @@ public:
      */
     void setAlarmCallback(AlarmCallback callback);
 
+    /**
+     * Check if any alarm is snoozed
+     * @return true if an alarm is snoozed
+     */
+    bool isAlarmSnoozed();
+
+    /**
+     * Check if any enabled alarm exists
+     * @return true if at least one alarm is enabled
+     */
+    bool hasEnabledAlarm();
+
 private:
     static const uint8_t SNOOZE_MINUTES = 5;
 
