@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		9D17177A2F1B2D0100C79423 /* AlarmClock.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 9D1717782F1B2D0100C79423 /* AlarmClock.xcdatamodeld */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		9D1717242F19FCE500C79423 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +31,7 @@
 		9D1717152F19FCE300C79423 /* Alarm Clock.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Alarm Clock.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9D1717232F19FCE500C79423 /* Alarm ClockTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Alarm ClockTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9D17172D2F19FCE500C79423 /* Alarm ClockUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Alarm ClockUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9D1717792F1B2D0100C79423 /* AlarmClock.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = AlarmClock.xcdatamodel; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -75,6 +80,7 @@
 		9D17170C2F19FCE300C79423 = {
 			isa = PBXGroup;
 			children = (
+				9D1717782F1B2D0100C79423 /* AlarmClock.xcdatamodeld */,
 				9D1717172F19FCE300C79423 /* Alarm Clock */,
 				9D1717262F19FCE500C79423 /* Alarm ClockTests */,
 				9D1717302F19FCE500C79423 /* Alarm ClockUITests */,
@@ -236,6 +242,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9D17177A2F1B2D0100C79423 /* AlarmClock.xcdatamodeld in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -601,6 +608,19 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCVersionGroup section */
+		9D1717782F1B2D0100C79423 /* AlarmClock.xcdatamodeld */ = {
+			isa = XCVersionGroup;
+			children = (
+				9D1717792F1B2D0100C79423 /* AlarmClock.xcdatamodel */,
+			);
+			currentVersion = 9D1717792F1B2D0100C79423 /* AlarmClock.xcdatamodel */;
+			path = AlarmClock.xcdatamodeld;
+			sourceTree = "<group>";
+			versionGroupType = wrapper.xcdatamodel;
+		};
+/* End XCVersionGroup section */
 	};
 	rootObject = 9D17170D2F19FCE300C79423 /* Project object */;
 }

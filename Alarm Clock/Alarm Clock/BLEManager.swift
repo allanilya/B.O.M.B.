@@ -72,11 +72,47 @@ class BLEManager: NSObject, ObservableObject {
     // Pending scan flag
     private var pendingScan = false
 
+    // CoreData persistence
+    private let persistenceController: PersistenceController
+
     // MARK: - Initialization
 
-    override init() {
+    init(persistenceController: PersistenceController = .shared) {
+        self.persistenceController = persistenceController
         super.init()
         centralManager = CBCentralManager(delegate: self, queue: nil)
+
+        // Load alarms from CoreData on initialization
+        loadAlarmsFromCoreData()
+    }
+
+    // MARK: - CoreData Integration
+
+    /// Load alarms from CoreData (called on app launch)
+    private func loadAlarmsFromCoreData() {
+        let savedAlarms = persistenceController.fetchAlarms()
+        DispatchQueue.main.async { [weak self] in
+            self?.alarms = savedAlarms.sorted { $0.id < $1.id }
+            print("BLEManager: Loaded \(savedAlarms.count) alarms from CoreData")
+        }
+    }
+
+    /// Save current alarms to CoreData
+    private func saveAlarmsToCoreData() {
+        persistenceController.saveAlarms(alarms)
+        print("BLEManager: Saved \(alarms.count) alarms to CoreData")
+    }
+
+    /// Save a single alarm to CoreData
+    private func saveAlarmToCoreData(_ alarm: Alarm) {
+        persistenceController.saveAlarm(alarm)
+        print("BLEManager: Saved alarm \(alarm.id) to CoreData")
+    }
+
+    /// Delete alarm from CoreData
+    private func deleteAlarmFromCoreData(id: Int) {
+        persistenceController.deleteAlarm(id: id)
+        print("BLEManager: Deleted alarm \(id) from CoreData")
     }
 
     // MARK: - Public Methods
@@ -180,7 +216,7 @@ class BLEManager: NSObject, ObservableObject {
 
     // MARK: - Alarm Management
 
-    /// Read all alarms from ESP32
+    /// Read all alarms from ESP32 (ESP32 is source of truth when connected)
     func readAlarms() {
         guard let characteristic = alarmListCharacteristic else {
             lastError = "AlarmList characteristic not found"
@@ -188,60 +224,77 @@ class BLEManager: NSObject, ObservableObject {
         }
 
         connectedPeripheral?.readValue(for: characteristic)
-        print("BLEManager: Reading alarm list...")
+        print("BLEManager: Reading alarm list from ESP32...")
     }
 
-    /// Set or update an alarm
+    /// Set or update an alarm (sends to ESP32 if connected, saves to CoreData)
     func setAlarm(_ alarm: Alarm) {
-        guard let characteristic = alarmSetCharacteristic else {
-            lastError = "AlarmSet characteristic not found"
-            return
-        }
-
         guard alarm.isValid else {
             lastError = "Invalid alarm data"
             return
         }
 
-        guard let jsonString = alarm.toJSONString(),
-              let data = jsonString.data(using: .utf8) else {
-            lastError = "Failed to serialize alarm to JSON"
-            return
-        }
+        // If connected to ESP32, send the alarm
+        if isConnected, let characteristic = alarmSetCharacteristic {
+            guard let jsonString = alarm.toJSONString(),
+                  let data = jsonString.data(using: .utf8) else {
+                lastError = "Failed to serialize alarm to JSON"
+                return
+            }
 
-        connectedPeripheral?.writeValue(data, for: characteristic, type: .withResponse)
-        print("BLEManager: Set alarm \(alarm.id): \(alarm.timeString)")
+            connectedPeripheral?.writeValue(data, for: characteristic, type: .withResponse)
+            print("BLEManager: Set alarm \(alarm.id): \(alarm.timeString) on ESP32")
 
-        // Refresh alarm list after setting
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.readAlarms()
+            // Refresh alarm list after setting (which will save to CoreData)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.readAlarms()
+            }
+        } else {
+            // Not connected, update local state and save to CoreData
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                if let index = self.alarms.firstIndex(where: { $0.id == alarm.id }) {
+                    self.alarms[index] = alarm
+                } else {
+                    self.alarms.append(alarm)
+                    self.alarms.sort { $0.id < $1.id }
+                }
+                self.saveAlarmToCoreData(alarm)
+                print("BLEManager: Set alarm \(alarm.id): \(alarm.timeString) locally (offline)")
+            }
         }
     }
 
-    /// Delete an alarm by ID
+    /// Delete an alarm by ID (deletes from ESP32 if connected, and from CoreData)
     func deleteAlarm(id: Int) {
-        guard let characteristic = alarmDeleteCharacteristic else {
-            lastError = "AlarmDelete characteristic not found"
-            return
-        }
-
         guard id >= 0 && id <= 9 else {
             lastError = "Invalid alarm ID"
             return
         }
 
-        let idString = String(id)
-        guard let data = idString.data(using: .utf8) else {
-            lastError = "Failed to encode alarm ID"
-            return
-        }
+        // If connected to ESP32, send delete command
+        if isConnected, let characteristic = alarmDeleteCharacteristic {
+            let idString = String(id)
+            guard let data = idString.data(using: .utf8) else {
+                lastError = "Failed to encode alarm ID"
+                return
+            }
 
-        connectedPeripheral?.writeValue(data, for: characteristic, type: .withResponse)
-        print("BLEManager: Deleted alarm \(id)")
+            connectedPeripheral?.writeValue(data, for: characteristic, type: .withResponse)
+            print("BLEManager: Deleted alarm \(id) from ESP32")
 
-        // Refresh alarm list after deleting
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.readAlarms()
+            // Refresh alarm list after deleting (which will save to CoreData)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.readAlarms()
+            }
+        } else {
+            // Not connected, update local state and delete from CoreData
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.alarms.removeAll { $0.id == id }
+                self.deleteAlarmFromCoreData(id: id)
+                print("BLEManager: Deleted alarm \(id) locally (offline)")
+            }
         }
     }
 
@@ -329,8 +382,13 @@ class BLEManager: NSObject, ObservableObject {
         let parsedAlarms = jsonArray.compactMap { Alarm.fromJSON($0) }
 
         DispatchQueue.main.async { [weak self] in
-            self?.alarms = parsedAlarms.sorted { $0.id < $1.id }
-            print("BLEManager: Parsed \(parsedAlarms.count) alarms")
+            guard let self = self else { return }
+            self.alarms = parsedAlarms.sorted { $0.id < $1.id }
+
+            // Save ESP32 alarms to CoreData (ESP32 is source of truth when connected)
+            self.saveAlarmsToCoreData()
+
+            print("BLEManager: Parsed \(parsedAlarms.count) alarms from ESP32 and saved to CoreData")
         }
     }
 }

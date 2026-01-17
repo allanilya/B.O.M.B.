@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var bleManager = BLEManager()
+    @EnvironmentObject private var bleManager: BLEManager
 
     var body: some View {
         TabView {
@@ -33,4 +33,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(BLEManager(persistenceController: .preview))
 }
