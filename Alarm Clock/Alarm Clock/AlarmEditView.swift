@@ -50,8 +50,8 @@ struct AlarmEditView: View {
             _snoozeEnabled = State(initialValue: alarm.snoozeEnabled)
             _permanentlyDisabled = State(initialValue: alarm.permanentlyDisabled)
             // Initialize infinite scroll positions (middle of range)
-            // Use base indices that are multiples of cycle size for correct positioning
-            _scrollHour = State(initialValue: 96 + (alarm.hour % 24))  // 96 = 4*24, middle of 200-item range
+            // Hour picker cycles 0-11, so use alarm.hour % 12
+            _scrollHour = State(initialValue: 96 + (alarm.hour % 12))  // 96 = 8*12, middle of 200-item range
             _scrollMinute = State(initialValue: 60 + (alarm.minute % 60))  // 60 = middle of 180-item range
         } else {
             _hour = State(initialValue: 7)
@@ -64,7 +64,7 @@ struct AlarmEditView: View {
             _snoozeEnabled = State(initialValue: true)
             _permanentlyDisabled = State(initialValue: false)  // New alarms never permanently disabled
             // Initialize infinite scroll positions (middle of range)
-            _scrollHour = State(initialValue: 100 + 7)
+            _scrollHour = State(initialValue: 96 + 7)  // 7 AM
             _scrollMinute = State(initialValue: 90 + 0)
         }
     }
@@ -165,14 +165,17 @@ struct AlarmEditView: View {
                 get: { scrollHour },
                 set: { newValue in
                     scrollHour = newValue
-                    // Convert to 0-23 hour
-                    let normalizedHour = ((newValue % 24) + 24) % 24
-                    hour = normalizedHour
+                    // Convert scroll position to 0-11 hour (12-hour format base)
+                    let hourIn12 = ((newValue % 12) + 12) % 12
+                    // Preserve current AM/PM state from hour value
+                    let currentPeriod = hour >= 12 ? 12 : 0
+                    hour = hourIn12 + currentPeriod
                 }
             )) {
                 ForEach(0..<200, id: \.self) { index in
-                    let h24 = ((index % 24) + 24) % 24
-                    Text(hourString24(h24))
+                    let h12 = ((index % 12) + 12) % 12
+                    let displayHour = h12 == 0 ? 12 : h12
+                    Text(String(displayHour))
                         .tag(index)
                 }
             }
@@ -202,14 +205,13 @@ struct AlarmEditView: View {
             Picker("Period", selection: Binding(
                 get: { hour < 12 ? 0 : 1 },
                 set: { newValue in
-                    if newValue == 0 && hour >= 12 {
-                        // Switching to AM
-                        hour -= 12
-                        scrollHour -= 12
-                    } else if newValue == 1 && hour < 12 {
-                        // Switching to PM
-                        hour += 12
-                        scrollHour += 12
+                    let hourIn12 = hour % 12
+                    if newValue == 0 {
+                        // Switch to AM (0-11)
+                        hour = hourIn12
+                    } else {
+                        // Switch to PM (12-23)
+                        hour = hourIn12 + 12
                     }
                 }
             )) {
@@ -220,11 +222,6 @@ struct AlarmEditView: View {
             .frame(maxWidth: .infinity)
         }
         .frame(height: 200)
-    }
-
-    private func hourString24(_ hour: Int) -> String {
-        let displayHour = hour % 12
-        return displayHour == 0 ? "12" : String(displayHour)
     }
 
     // MARK: - Helper Properties

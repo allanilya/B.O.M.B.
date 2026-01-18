@@ -100,7 +100,7 @@ class BLEManager: NSObject, ObservableObject {
         }
     }
 
-    /// Auto-disable one-time alarms (days=0) when their time is reached
+    /// Auto-disable one-time alarms (days=0) when their time has passed
     func checkAndDisableExpiredOneTimeAlarms() {
         let now = Date()
         let calendar = Calendar.current
@@ -115,11 +115,13 @@ class BLEManager: NSObject, ObservableObject {
             // Only check enabled one-time alarms (daysOfWeek == 0) that aren't already permanently disabled
             guard alarm.enabled && alarm.daysOfWeek == 0 && !alarm.permanentlyDisabled else { continue }
 
-            // Check if current time EXACTLY matches alarm time
-            let alarmTimeMatches = (alarm.hour == currentHour && alarm.minute == currentMinute)
+            // Check if current time >= alarm time (terminal condition: now has passed scheduled time)
+            let currentTimeInMinutes = currentHour * 60 + currentMinute
+            let alarmTimeInMinutes = alarm.hour * 60 + alarm.minute
+            let timeHasPassed = currentTimeInMinutes >= alarmTimeInMinutes
 
-            if alarmTimeMatches {
-                print("BLEManager: Permanently disabling one-time alarm \(alarm.id) at \(alarm.timeString)")
+            if timeHasPassed {
+                print("BLEManager: Permanently disabling expired one-time alarm \(alarm.id) - scheduled: \(alarm.timeString), now: \(currentHour):\(String(format: "%02d", currentMinute))")
                 alarms[i].enabled = false
                 alarms[i].permanentlyDisabled = true
                 hasChanges = true
@@ -303,9 +305,6 @@ class BLEManager: NSObject, ObservableObject {
                 }
                 self.saveAlarmToCoreData(alarm)
                 print("BLEManager: Set alarm \(alarm.id): \(alarm.timeString) locally (offline)")
-
-                // Check and disable expired one-time alarms after saving
-                self.checkAndDisableExpiredOneTimeAlarms()
             }
         }
     }
