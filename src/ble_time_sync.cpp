@@ -115,8 +115,8 @@ bool BLETimeSync::begin(const char* deviceName) {
     // Start the alarm service
     _pAlarmService->start();
 
-    // Update alarm list initially
-    updateAlarmList();
+    // NOTE: Don't send alarm list initially - iOS will push its alarms on connection
+    // updateAlarmList();  // Disabled: iOS is source of truth and will push on connect
 
     // Start advertising
     BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
@@ -375,7 +375,8 @@ void BLETimeSync::AlarmSetCharCallbacks::onWrite(BLECharacteristic* pCharacteris
         // Set the alarm
         if (alarmManager.setAlarm(alarm)) {
             Serial.println("BLE: Alarm set successfully!");
-            _parent->updateAlarmList();
+            // NOTE: Don't send alarm list back to iOS - iOS is the source of truth
+            // _parent->updateAlarmList();  // Disabled: iOS ignores this data + can exceed BLE MTU
         } else {
             Serial.println("BLE: ERROR - Failed to set alarm!");
         }
@@ -397,7 +398,8 @@ void BLETimeSync::AlarmDeleteCharCallbacks::onWrite(BLECharacteristic* pCharacte
 
         if (alarmManager.deleteAlarm(alarmId)) {
             Serial.println("BLE: Alarm deleted successfully!");
-            _parent->updateAlarmList();
+            // NOTE: Don't send alarm list back to iOS - iOS is the source of truth
+            // _parent->updateAlarmList();  // Disabled: iOS ignores this data + can exceed BLE MTU
         } else {
             Serial.println("BLE: ERROR - Failed to delete alarm!");
         }

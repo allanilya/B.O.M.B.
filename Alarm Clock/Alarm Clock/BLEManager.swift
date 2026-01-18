@@ -103,9 +103,6 @@ class BLEManager: NSObject, ObservableObject {
     /// Auto-disable one-time alarms (days=0) when their time has passed
     func checkAndDisableExpiredOneTimeAlarms() {
         let now = Date()
-        let calendar = Calendar.current
-        let currentHour = calendar.component(.hour, from: now)
-        let currentMinute = calendar.component(.minute, from: now)
 
         var hasChanges = false
 
@@ -115,16 +112,14 @@ class BLEManager: NSObject, ObservableObject {
             // Only check enabled one-time alarms (daysOfWeek == 0) that aren't already permanently disabled
             guard alarm.enabled && alarm.daysOfWeek == 0 && !alarm.permanentlyDisabled else { continue }
 
-            // Check if current time >= alarm time (terminal condition: now has passed scheduled time)
-            let currentTimeInMinutes = currentHour * 60 + currentMinute
-            let alarmTimeInMinutes = alarm.hour * 60 + alarm.minute
-            let timeHasPassed = currentTimeInMinutes >= alarmTimeInMinutes
-
-            if timeHasPassed {
-                print("BLEManager: Permanently disabling expired one-time alarm \(alarm.id) - scheduled: \(alarm.timeString), now: \(currentHour):\(String(format: "%02d", currentMinute))")
-                alarms[i].enabled = false
-                alarms[i].permanentlyDisabled = true
-                hasChanges = true
+            // Check if scheduledDate has passed
+            if let scheduledDate = alarm.scheduledDate {
+                if now >= scheduledDate {
+                    print("BLEManager: Permanently disabling expired one-time alarm \(alarm.id) - scheduled: \(scheduledDate), now: \(now)")
+                    alarms[i].enabled = false
+                    alarms[i].permanentlyDisabled = true
+                    hasChanges = true
+                }
             }
         }
 

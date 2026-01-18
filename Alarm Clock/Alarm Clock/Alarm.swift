@@ -18,10 +18,11 @@ struct Alarm: Identifiable, Codable {
     var label: String        // Custom alarm name
     var snoozeEnabled: Bool  // Is snooze enabled for this alarm?
     var permanentlyDisabled: Bool  // One-shot alarms permanently disabled after firing
+    var scheduledDate: Date?  // Absolute scheduled time for one-shot alarms (nil for repeating alarms)
 
     // MARK: - Initialization
 
-    init(id: Int = 0, hour: Int = 7, minute: Int = 0, daysOfWeek: Int = 0x7F, sound: String = "tone1", enabled: Bool = true, label: String = "Alarm", snoozeEnabled: Bool = true, permanentlyDisabled: Bool = false) {
+    init(id: Int = 0, hour: Int = 7, minute: Int = 0, daysOfWeek: Int = 0x7F, sound: String = "tone1", enabled: Bool = true, label: String = "Alarm", snoozeEnabled: Bool = true, permanentlyDisabled: Bool = false, scheduledDate: Date? = nil) {
         self.id = id
         self.hour = hour
         self.minute = minute
@@ -31,6 +32,7 @@ struct Alarm: Identifiable, Codable {
         self.label = label
         self.snoozeEnabled = snoozeEnabled
         self.permanentlyDisabled = permanentlyDisabled
+        self.scheduledDate = scheduledDate
     }
 
     // MARK: - Computed Properties
@@ -135,6 +137,7 @@ struct Alarm: Identifiable, Codable {
     // MARK: - JSON Serialization
 
     /// Convert to JSON dictionary for BLE transmission
+    /// Note: scheduledDate is NOT included - it's iOS-only metadata for auto-disable logic
     func toJSON() -> [String: Any] {
         return [
             "id": id,
@@ -174,7 +177,9 @@ struct Alarm: Identifiable, Codable {
         let snoozeEnabled = json["snooze"] as? Bool ?? true
         let permanentlyDisabled = json["perm_disabled"] as? Bool ?? false
 
-        return Alarm(id: id, hour: hour, minute: minute, daysOfWeek: days, sound: sound, enabled: enabled, label: label, snoozeEnabled: snoozeEnabled, permanentlyDisabled: permanentlyDisabled)
+        // scheduledDate is not transmitted via BLE - it's iOS-only metadata
+        // It will be recalculated when the alarm is saved in iOS
+        return Alarm(id: id, hour: hour, minute: minute, daysOfWeek: days, sound: sound, enabled: enabled, label: label, snoozeEnabled: snoozeEnabled, permanentlyDisabled: permanentlyDisabled, scheduledDate: nil)
     }
 
     // MARK: - Validation

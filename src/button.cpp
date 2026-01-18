@@ -69,8 +69,8 @@ void Button::update() {
                 _releasedFlag = true;
                 _pressDuration = currentTime - _pressStartTime;
 
-                // Track clicks for double-click detection
-                if (currentTime - _lastClickTime < 500) {
+                // Track clicks for double-click detection (700ms window)
+                if (currentTime - _lastClickTime < 700) {
                     _clickCount++;
                     Serial.print("[Button] Click count: ");
                     Serial.println(_clickCount);

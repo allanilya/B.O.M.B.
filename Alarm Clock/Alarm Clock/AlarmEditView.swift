@@ -284,6 +284,25 @@ struct AlarmEditView: View {
             }
         }
 
+        // Calculate scheduledDate for one-shot alarms
+        var scheduledDate: Date? = nil
+        if daysOfWeek == 0 {
+            // One-shot alarm - calculate next occurrence
+            let calendar = Calendar.current
+            var components = calendar.dateComponents([.year, .month, .day], from: Date())
+            components.hour = hour
+            components.minute = minute
+            components.second = 0
+
+            if var scheduled = calendar.date(from: components) {
+                // If selected time <= now, schedule for tomorrow
+                if scheduled <= Date() {
+                    scheduled = calendar.date(byAdding: .day, value: 1, to: scheduled)!
+                }
+                scheduledDate = scheduled
+            }
+        }
+
         // Always enable alarms when user edits/creates them
         // Auto-disable logic only runs when scheduled time is actually reached
         let newAlarm = Alarm(
@@ -295,7 +314,8 @@ struct AlarmEditView: View {
             enabled: true,  // User is actively setting this alarm, so enable it
             label: label,
             snoozeEnabled: snoozeEnabled,
-            permanentlyDisabled: false  // Clear permanent disable flag when editing
+            permanentlyDisabled: false,  // Clear permanent disable flag when editing
+            scheduledDate: scheduledDate
         )
 
         guard newAlarm.isValid else {
