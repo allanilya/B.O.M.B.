@@ -17,6 +17,7 @@ const char* BLETimeSync::DATETIME_CHAR_UUID = "12340002-1234-5678-1234-56789abcd
 const char* BLETimeSync::VOLUME_CHAR_UUID = "12340003-1234-5678-1234-56789abcdef0";
 const char* BLETimeSync::TEST_SOUND_CHAR_UUID = "12340004-1234-5678-1234-56789abcdef0";
 const char* BLETimeSync::DISPLAY_MESSAGE_CHAR_UUID = "12340005-1234-5678-1234-56789abcdef0";
+const char* BLETimeSync::BOTTOM_ROW_LABEL_CHAR_UUID = "12340006-1234-5678-1234-56789abcdef0";
 
 // BLE Alarm Service UUID: Custom alarm management service
 const char* BLETimeSync::ALARM_SERVICE_UUID = "12340010-1234-5678-1234-56789abcdef0";
@@ -86,13 +87,21 @@ bool BLETimeSync::begin(const char* deviceName) {
     );
     _pTestSoundCharacteristic->setCallbacks(new TestSoundCharCallbacks(this));
 
-    // Create Display Message Characteristic (Read/Write: custom message for top row, max 50 chars)
+    // Create Display Message Characteristic (Read/Write: custom message for top row, max 100 chars)
     _pDisplayMessageCharacteristic = _pTimeService->createCharacteristic(
         DISPLAY_MESSAGE_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE
     );
     _pDisplayMessageCharacteristic->setCallbacks(new DisplayMessageCharCallbacks(this));
     _pDisplayMessageCharacteristic->setValue(displayManager.getCustomMessage().c_str());
+
+    // Create Bottom Row Label Characteristic (Read/Write: custom label for bottom row, max 50 chars)
+    _pBottomRowLabelCharacteristic = _pTimeService->createCharacteristic(
+        BOTTOM_ROW_LABEL_CHAR_UUID,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE
+    );
+    _pBottomRowLabelCharacteristic->setCallbacks(new BottomRowLabelCharCallbacks(this));
+    _pBottomRowLabelCharacteristic->setValue(displayManager.getBottomRowLabel().c_str());
 
     // Set initial value
     time_t currentTime = time(nullptr);
@@ -198,7 +207,9 @@ void BLETimeSync::updateAlarmList() {
         json += alarms[i].snoozeEnabled ? "true" : "false";
         json += ",\"perm_disabled\":";
         json += alarms[i].permanentlyDisabled ? "true" : "false";
-        json += "}";
+        json += ",\"bottomRowLabel\":\"";
+        json += alarms[i].bottomRowLabel;
+        json += "\"}";
     }
 
     json += "]";
@@ -385,6 +396,15 @@ void BLETimeSync::AlarmSetCharCallbacks::onWrite(BLECharacteristic* pCharacteris
             alarm.permanentlyDisabled = false;  // Default
         }
 
+        // Extract bottomRowLabel (optional for backward compatibility)
+        int bottomRowIdx = json.indexOf("\"bottomRowLabel\":\"");
+        if (bottomRowIdx >= 0) {
+            int bottomRowEnd = json.indexOf("\"", bottomRowIdx + 18);
+            alarm.bottomRowLabel = json.substring(bottomRowIdx + 18, bottomRowEnd);
+        } else {
+            alarm.bottomRowLabel = "";  // Default empty
+        }
+
         // Set the alarm
         if (alarmManager.setAlarm(alarm)) {
             Serial.println("BLE: Alarm set successfully!");
@@ -511,4 +531,15 @@ void BLETimeSync::DisplayMessageCharCallbacks::onWrite(BLECharacteristic* pChara
 
     // Update DisplayManager with new message
     displayManager.setCustomMessage(message);
+}
+
+void BLETimeSync::BottomRowLabelCharCallbacks::onWrite(BLECharacteristic* pCharacteristic) {
+    std::string value = pCharacteristic->getValue();
+    String label = String(value.c_str());
+
+    Serial.print("\n>>> BLE: Bottom row label set to: ");
+    Serial.println(label.length() > 0 ? label : "(empty - using default layout)");
+
+    // Update DisplayManager with new bottom row label
+    displayManager.setBottomRowLabel(label);
 }

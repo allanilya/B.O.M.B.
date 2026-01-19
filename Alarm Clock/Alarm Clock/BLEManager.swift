@@ -23,6 +23,7 @@ class BLEManager: NSObject, ObservableObject {
     @Published var lastSyncTime: Date?
     @Published var isBluetoothReady = false
     @Published var displayMessage: String = ""
+    @Published var bottomRowLabel: String = ""
 
     // MARK: - Connection State
 
@@ -44,6 +45,7 @@ class BLEManager: NSObject, ObservableObject {
     private let volumeCharUUID = CBUUID(string: "12340003-1234-5678-1234-56789abcdef0")
     private let testSoundCharUUID = CBUUID(string: "12340004-1234-5678-1234-56789abcdef0")
     private let displayMessageCharUUID = CBUUID(string: "12340005-1234-5678-1234-56789abcdef0")
+    private let bottomRowLabelCharUUID = CBUUID(string: "12340006-1234-5678-1234-56789abcdef0")
 
     private let alarmServiceUUID = CBUUID(string: "12340010-1234-5678-1234-56789abcdef0")
     private let alarmSetCharUUID = CBUUID(string: "12340011-1234-5678-1234-56789abcdef0")
@@ -61,6 +63,7 @@ class BLEManager: NSObject, ObservableObject {
     private var volumeCharacteristic: CBCharacteristic?
     private var testSoundCharacteristic: CBCharacteristic?
     private var displayMessageCharacteristic: CBCharacteristic?
+    private var bottomRowLabelCharacteristic: CBCharacteristic?
     private var alarmSetCharacteristic: CBCharacteristic?
     private var alarmListCharacteristic: CBCharacteristic?
     private var alarmDeleteCharacteristic: CBCharacteristic?
@@ -387,6 +390,26 @@ class BLEManager: NSObject, ObservableObject {
         print("BLEManager: Set display message: \"\(truncatedMessage)\"")
     }
 
+    /// Set bottom row label on ESP32
+    func setBottomRowLabel(_ label: String) {
+        guard let characteristic = bottomRowLabelCharacteristic else {
+            lastError = "Bottom row label characteristic not found"
+            return
+        }
+
+        // Truncate to 50 characters
+        let truncatedLabel = String(label.prefix(50))
+
+        guard let data = truncatedLabel.data(using: .utf8) else {
+            lastError = "Failed to encode bottom row label"
+            return
+        }
+
+        connectedPeripheral?.writeValue(data, for: characteristic, type: .withResponse)
+        bottomRowLabel = truncatedLabel
+        print("BLEManager: Set bottom row label: \"\(truncatedLabel)\"")
+    }
+
     /// Trigger test sound on ESP32
     func testSound() {
         testSound(soundName: "tone1")  // Default to tone1
@@ -609,6 +632,11 @@ extension BLEManager: CBPeripheralDelegate {
                 print("BLEManager: Found DisplayMessage characteristic")
                 // Read current display message
                 peripheral.readValue(for: characteristic)
+            } else if characteristic.uuid == bottomRowLabelCharUUID {
+                bottomRowLabelCharacteristic = characteristic
+                print("BLEManager: Found BottomRowLabel characteristic")
+                // Read current bottom row label
+                peripheral.readValue(for: characteristic)
             } else if characteristic.uuid == alarmSetCharUUID {
                 alarmSetCharacteristic = characteristic
                 print("BLEManager: Found AlarmSet characteristic")
@@ -660,6 +688,17 @@ extension BLEManager: CBPeripheralDelegate {
                     self?.displayMessage = message
                 }
                 print("BLEManager: Read display message from ESP32: \"\(message)\"")
+            }
+            return
+        }
+
+        // Handle bottom row label characteristic read
+        if characteristic.uuid == bottomRowLabelCharUUID {
+            if let data = characteristic.value, let label = String(data: data, encoding: .utf8) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.bottomRowLabel = label
+                }
+                print("BLEManager: Read bottom row label from ESP32: \"\(label)\"")
             }
             return
         }

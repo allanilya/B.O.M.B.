@@ -239,7 +239,7 @@ void AlarmManager::loadFromNVS() {
         String key = getAlarmKey(id);
 
         if (_prefs.isKey(key.c_str())) {
-            // Load alarm data (format: "hour,minute,days,enabled,sound,label,snooze,perm_disabled")
+            // Load alarm data (format: "hour,minute,days,enabled,sound,label,snooze,perm_disabled,bottomRowLabel")
             String data = _prefs.getString(key.c_str(), "");
 
             if (data.length() > 0) {
@@ -254,6 +254,7 @@ void AlarmManager::loadFromNVS() {
                 int idx5 = data.indexOf(',', idx4 + 1);
                 int idx6 = data.indexOf(',', idx5 + 1);
                 int idx7 = data.indexOf(',', idx6 + 1);
+                int idx8 = data.indexOf(',', idx7 + 1);
 
                 if (idx1 > 0 && idx2 > 0 && idx3 > 0 && idx4 > 0) {
                     alarm.hour = data.substring(0, idx1).toInt();
@@ -262,24 +263,34 @@ void AlarmManager::loadFromNVS() {
                     alarm.enabled = data.substring(idx3 + 1, idx4).toInt() == 1;
 
                     // Handle different formats
-                    if (idx5 > 0 && idx6 > 0 && idx7 > 0) {
-                        // Newest format with label, snooze, and perm_disabled
+                    if (idx5 > 0 && idx6 > 0 && idx7 > 0 && idx8 > 0) {
+                        // Newest format with label, snooze, perm_disabled, and bottomRowLabel
+                        alarm.sound = data.substring(idx4 + 1, idx5);
+                        alarm.label = data.substring(idx5 + 1, idx6);
+                        alarm.snoozeEnabled = data.substring(idx6 + 1, idx7).toInt() == 1;
+                        alarm.permanentlyDisabled = data.substring(idx7 + 1, idx8).toInt() == 1;
+                        alarm.bottomRowLabel = data.substring(idx8 + 1);
+                    } else if (idx5 > 0 && idx6 > 0 && idx7 > 0) {
+                        // Previous format with label, snooze, and perm_disabled (no bottomRowLabel)
                         alarm.sound = data.substring(idx4 + 1, idx5);
                         alarm.label = data.substring(idx5 + 1, idx6);
                         alarm.snoozeEnabled = data.substring(idx6 + 1, idx7).toInt() == 1;
                         alarm.permanentlyDisabled = data.substring(idx7 + 1).toInt() == 1;
+                        alarm.bottomRowLabel = "";  // Default empty
                     } else if (idx5 > 0 && idx6 > 0) {
                         // Old format with label and snooze
                         alarm.sound = data.substring(idx4 + 1, idx5);
                         alarm.label = data.substring(idx5 + 1, idx6);
                         alarm.snoozeEnabled = data.substring(idx6 + 1).toInt() == 1;
                         alarm.permanentlyDisabled = false;  // Default
+                        alarm.bottomRowLabel = "";  // Default empty
                     } else {
                         // Oldest format - just sound
                         alarm.sound = data.substring(idx4 + 1);
                         alarm.label = "Alarm";  // Default label
                         alarm.snoozeEnabled = true;  // Default snooze enabled
                         alarm.permanentlyDisabled = false;  // Default
+                        alarm.bottomRowLabel = "";  // Default empty
                     }
 
                     _alarms.push_back(alarm);
@@ -294,7 +305,7 @@ void AlarmManager::saveToNVS() {
     for (const auto& alarm : _alarms) {
         String key = getAlarmKey(alarm.id);
 
-        // Format: "hour,minute,days,enabled,sound,label,snooze,perm_disabled"
+        // Format: "hour,minute,days,enabled,sound,label,snooze,perm_disabled,bottomRowLabel"
         String data = String(alarm.hour) + "," +
                      String(alarm.minute) + "," +
                      String(alarm.daysOfWeek) + "," +
@@ -302,7 +313,8 @@ void AlarmManager::saveToNVS() {
                      alarm.sound + "," +
                      alarm.label + "," +
                      String(alarm.snoozeEnabled ? 1 : 0) + "," +
-                     String(alarm.permanentlyDisabled ? 1 : 0);
+                     String(alarm.permanentlyDisabled ? 1 : 0) + "," +
+                     alarm.bottomRowLabel;
 
         _prefs.putString(key.c_str(), data);
     }

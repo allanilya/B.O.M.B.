@@ -80,6 +80,37 @@ struct SettingsView: View {
                     }
                 }
 
+                Section(header: Text("Bottom Row Label"), footer: Text("Custom label appears on bottom row. Day and date move under time. Leave empty for default layout.")) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        TextField("Enter bottom label (max 50 chars)", text: $bleManager.bottomRowLabel)
+                            .onChange(of: bleManager.bottomRowLabel) {
+                                // Truncate to 50 chars
+                                if bleManager.bottomRowLabel.count > 50 {
+                                    bleManager.bottomRowLabel = String(bleManager.bottomRowLabel.prefix(50))
+                                }
+                                // Send to ESP32
+                                bleManager.setBottomRowLabel(bleManager.bottomRowLabel)
+                            }
+                            .disabled(!bleManager.isConnected)
+
+                        if !bleManager.isConnected {
+                            Text("Connect to ESP32 to set bottom label")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        if bleManager.bottomRowLabel.isEmpty {
+                            Text("Currently using default layout")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Bottom row: \"\(bleManager.bottomRowLabel)\"")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
                 Section(header: Text("About")) {
                     HStack {
                         Text("Device")

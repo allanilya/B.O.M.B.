@@ -33,8 +33,10 @@ public:
     /**
      * Show alarm ringing screen
      * @param timeStr Current time
+     * @param alarmLabel Alarm label to display (e.g., "Morning Routine")
+     * @param bottomRowLabel Custom bottom row text (or empty to show instructions)
      */
-    void showAlarmRinging(const String& timeStr);
+    void showAlarmRinging(const String& timeStr, const String& alarmLabel, const String& bottomRowLabel);
 
     /**
      * Set BLE connection status
@@ -67,6 +69,18 @@ public:
     String getCustomMessage() const;
 
     /**
+     * Set custom label for bottom row of display
+     * @param label Custom label (max 50 chars, empty string to disable)
+     */
+    void setBottomRowLabel(const String& label);
+
+    /**
+     * Get current bottom row label
+     * @return Bottom row label string
+     */
+    String getBottomRowLabel() const;
+
+    /**
      * Force a full refresh on next update
      */
     void forceFullRefresh();
@@ -78,6 +92,7 @@ private:
     bool _timeSynced;
     String _alarmStatus;  // "ALARM", "SNOOZE", or ""
     String _customMessage;  // Custom message for top row (empty = use day of week)
+    String _bottomRowLabel;  // Custom label for bottom row (empty = use default layout)
     unsigned long _lastFullRefresh;
     bool _forceFullRefresh;
     String _lastTimeStr;

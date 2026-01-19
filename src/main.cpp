@@ -270,7 +270,18 @@ void loop() {
             uint8_t hour, minute, second;
             timeManager.getTime(hour, minute, second);
             String timeStr = timeManager.getTimeString(true);
-            displayManager.showAlarmRinging(timeStr);
+
+            // Get alarm label and bottom row label to display
+            uint8_t alarmId = alarmManager.getRingingAlarmId();
+            AlarmData alarm;
+            String alarmLabel = "ALARM";  // Default fallback
+            String bottomRowLabel = "";    // Default empty (shows instructions)
+            if (alarmManager.getAlarm(alarmId, alarm)) {
+                alarmLabel = alarm.label;
+                bottomRowLabel = alarm.bottomRowLabel;
+            }
+
+            displayManager.showAlarmRinging(timeStr, alarmLabel, bottomRowLabel);
             displayUpdatedForAlarm = true;
         }
 

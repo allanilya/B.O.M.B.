@@ -12,6 +12,7 @@ DisplayManager::DisplayManager()
       _timeSynced(false),
       _alarmStatus(""),
       _customMessage(""),
+      _bottomRowLabel(""),
       _lastFullRefresh(0),
       _forceFullRefresh(false),
       _lastTimeStr(""),
@@ -47,15 +48,21 @@ bool DisplayManager::begin() {
         _display->fillScreen(GxEPD_WHITE);
     } while (_display->nextPage());
 
-    // Load custom message from NVS
+    // Load custom message and bottom row label from NVS
     Preferences prefs;
     prefs.begin("display", true);  // Read-only
     _customMessage = prefs.getString("customMsg", "");
+    _bottomRowLabel = prefs.getString("bottomLabel", "");
     prefs.end();
 
     if (_customMessage.length() > 0) {
         Serial.print("DisplayManager: Loaded custom message: ");
         Serial.println(_customMessage);
+    }
+
+    if (_bottomRowLabel.length() > 0) {
+        Serial.print("DisplayManager: Loaded bottom row label: ");
+        Serial.println(_bottomRowLabel);
     }
 
     _lastFullRefresh = millis();
@@ -199,26 +206,51 @@ void DisplayManager::showClock(const String& timeStr, const String& dateStr, con
         // Draw center dot
         _display->fillCircle(clockCenterX, clockCenterY, 2, GxEPD_BLACK);
 
-        // Bottom row: Day, Date (if custom message set) or just date
-        _display->setFont(&FreeMonoBold12pt7b);
-        String bottomText = (_customMessage.length() > 0) ? (dayStr + dateStr) : dateStr;
-        _display->getTextBounds(bottomText.c_str(), 0, 0, &x1, &y1, &w, &h);
-        int16_t bottomX = (_display->width() - w) / 2;
-        _display->setCursor(bottomX, _display->height() - 30);
-        _display->print(bottomText);
+        // Check if bottom row label is set for dynamic layout
+        if (_bottomRowLabel.length() > 0) {
+            // LAYOUT WITH BOTTOM LABEL:
+            // - Draw day and date UNDER the time (smaller font)
+            _display->setFont(&FreeMono9pt7b);
+            String dayDateStr = dayStr + ", " + dateStr;
+            _display->getTextBounds(dayDateStr.c_str(), 0, 0, &x1, &y1, &w, &h);
+            int16_t dayDateX = (_display->width() - w) / 2;
+            int16_t dayDateY = timeY + 35;  // Below the time
+            _display->setCursor(dayDateX, dayDateY);
+            _display->print(dayDateStr);
 
-        // Draw horizontal line above date
-        _display->drawLine(20, _display->height() - 50, _display->width() - 20, _display->height() - 50, GxEPD_BLACK);
+            // - Draw bottom row label at the bottom
+            _display->setFont(&FreeMonoBold12pt7b);
+            _display->getTextBounds(_bottomRowLabel.c_str(), 0, 0, &x1, &y1, &w, &h);
+            int16_t bottomX = (_display->width() - w) / 2;
+            _display->setCursor(bottomX, _display->height() - 30);
+            _display->print(_bottomRowLabel);
+
+            // Draw horizontal line above bottom label
+            _display->drawLine(20, _display->height() - 50, _display->width() - 20, _display->height() - 50, GxEPD_BLACK);
+        } else {
+            // DEFAULT LAYOUT (no bottom label):
+            // - Bottom row shows: Day+Date (if custom message) OR just Date
+            _display->setFont(&FreeMonoBold12pt7b);
+            String bottomText = (_customMessage.length() > 0) ? (dayStr + " " + dateStr) : dateStr;
+            _display->getTextBounds(bottomText.c_str(), 0, 0, &x1, &y1, &w, &h);
+            int16_t bottomX = (_display->width() - w) / 2;
+            _display->setCursor(bottomX, _display->height() - 30);
+            _display->print(bottomText);
+
+            // Draw horizontal line above date
+            _display->drawLine(20, _display->height() - 50, _display->width() - 20, _display->height() - 50, GxEPD_BLACK);
+        }
 
     } while (_display->nextPage());
 
     _lastTimeStr = timeStr;
 }
 
-void DisplayManager::showAlarmRinging(const String& timeStr) {
+void DisplayManager::showAlarmRinging(const String& timeStr, const String& alarmLabel, const String& bottomRowLabel) {
     if (!_initialized) return;
 
-    Serial.println("DisplayManager: Showing alarm ringing screen...");
+    Serial.print("DisplayManager: Showing alarm ringing screen for: ");
+    Serial.println(alarmLabel);
 
     _display->setFullWindow();
     _display->firstPage();
@@ -233,36 +265,63 @@ void DisplayManager::showAlarmRinging(const String& timeStr) {
                              GxEPD_BLACK);
         }
 
-        // "ALARM!" text
+        // Display alarm label (truncate if too long)
         _display->setFont(&FreeMonoBold24pt7b);
         int16_t x1, y1;
         uint16_t w, h;
-        const char* alarmText = "ALARM!";
-        _display->getTextBounds(alarmText, 0, 0, &x1, &y1, &w, &h);
+        String displayLabel = alarmLabel;
+
+        // Check if label fits, use smaller font if needed
+        _display->getTextBounds(displayLabel.c_str(), 0, 0, &x1, &y1, &w, &h);
+        if (w > (_display->width() - 40)) {
+            // Try smaller font
+            _display->setFont(&FreeMonoBold12pt7b);
+            _display->getTextBounds(displayLabel.c_str(), 0, 0, &x1, &y1, &w, &h);
+            // If still too long, truncate
+            if (w > (_display->width() - 40)) {
+                while (displayLabel.length() > 0 && w > (_display->width() - 40)) {
+                    displayLabel = displayLabel.substring(0, displayLabel.length() - 1);
+                    _display->getTextBounds(displayLabel.c_str(), 0, 0, &x1, &y1, &w, &h);
+                }
+            }
+        }
+
+        _display->getTextBounds(displayLabel.c_str(), 0, 0, &x1, &y1, &w, &h);
         int16_t alarmX = (_display->width() - w) / 2;
         _display->setCursor(alarmX, 80);
-        _display->print(alarmText);
+        _display->print(displayLabel);
 
-        // Current time
-        _display->setFont(&FreeMonoBold12pt7b);
+        // Current time - USE SAME FONT AS NORMAL CLOCK (FreeSansBold24pt7b)
+        _display->setFont(&FreeSansBold24pt7b);
         _display->getTextBounds(timeStr.c_str(), 0, 0, &x1, &y1, &w, &h);
         int16_t timeX = (_display->width() - w) / 2;
-        _display->setCursor(timeX, _display->height() / 2 + 20);
+        int16_t timeY = (_display->height() / 2) + 20;
+        _display->setCursor(timeX, timeY);
         _display->print(timeStr);
 
-        // Instructions
-        _display->setFont(&FreeMono9pt7b);
-        const char* instr1 = "Single click: Snooze 5 min";
-        _display->getTextBounds(instr1, 0, 0, &x1, &y1, &w, &h);
-        int16_t instr1X = (_display->width() - w) / 2;
-        _display->setCursor(instr1X, _display->height() - 50);
-        _display->print(instr1);
+        // Bottom row: Show custom label if set, otherwise show instructions
+        if (bottomRowLabel.length() > 0) {
+            // Show custom bottom row label
+            _display->setFont(&FreeMonoBold12pt7b);
+            _display->getTextBounds(bottomRowLabel.c_str(), 0, 0, &x1, &y1, &w, &h);
+            int16_t labelX = (_display->width() - w) / 2;
+            _display->setCursor(labelX, _display->height() - 30);
+            _display->print(bottomRowLabel);
+        } else {
+            // Show default instructions
+            _display->setFont(&FreeMono9pt7b);
+            const char* instr1 = "Single click: Snooze 5 min";
+            _display->getTextBounds(instr1, 0, 0, &x1, &y1, &w, &h);
+            int16_t instr1X = (_display->width() - w) / 2;
+            _display->setCursor(instr1X, _display->height() - 50);
+            _display->print(instr1);
 
-        const char* instr2 = "Double click: Dismiss";
-        _display->getTextBounds(instr2, 0, 0, &x1, &y1, &w, &h);
-        int16_t instr2X = (_display->width() - w) / 2;
-        _display->setCursor(instr2X, _display->height() - 30);
-        _display->print(instr2);
+            const char* instr2 = "Double click: Dismiss";
+            _display->getTextBounds(instr2, 0, 0, &x1, &y1, &w, &h);
+            int16_t instr2X = (_display->width() - w) / 2;
+            _display->setCursor(instr2X, _display->height() - 30);
+            _display->print(instr2);
+        }
 
     } while (_display->nextPage());
 }
@@ -299,6 +358,24 @@ void DisplayManager::setCustomMessage(const String& message) {
 
 String DisplayManager::getCustomMessage() const {
     return _customMessage;
+}
+
+void DisplayManager::setBottomRowLabel(const String& label) {
+    // Max 50 chars for bottom row label
+    _bottomRowLabel = label.substring(0, 50);
+
+    // Save to NVS
+    Preferences prefs;
+    prefs.begin("display", false);
+    prefs.putString("bottomLabel", _bottomRowLabel);
+    prefs.end();
+
+    Serial.print("DisplayManager: Bottom row label set to: ");
+    Serial.println(_bottomRowLabel.length() > 0 ? _bottomRowLabel : "(empty)");
+}
+
+String DisplayManager::getBottomRowLabel() const {
+    return _bottomRowLabel;
 }
 
 void DisplayManager::forceFullRefresh() {

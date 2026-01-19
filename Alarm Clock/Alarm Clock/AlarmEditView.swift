@@ -25,6 +25,7 @@ struct AlarmEditView: View {
     @State private var label: String
     @State private var snoozeEnabled: Bool
     @State private var permanentlyDisabled: Bool
+    @State private var bottomRowLabel: String
 
     // Infinite scroll state for pickers
     @State private var scrollHour: Int = 100
@@ -49,6 +50,7 @@ struct AlarmEditView: View {
             _label = State(initialValue: alarm.label)
             _snoozeEnabled = State(initialValue: alarm.snoozeEnabled)
             _permanentlyDisabled = State(initialValue: alarm.permanentlyDisabled)
+            _bottomRowLabel = State(initialValue: alarm.bottomRowLabel)
             // Initialize infinite scroll positions (middle of range)
             // Hour picker cycles 0-11, so use alarm.hour % 12
             _scrollHour = State(initialValue: 96 + (alarm.hour % 12))  // 96 = 8*12, middle of 200-item range
@@ -63,6 +65,7 @@ struct AlarmEditView: View {
             _label = State(initialValue: "Alarm")
             _snoozeEnabled = State(initialValue: true)
             _permanentlyDisabled = State(initialValue: false)  // New alarms never permanently disabled
+            _bottomRowLabel = State(initialValue: "")  // Default empty
             // Initialize infinite scroll positions (middle of range)
             _scrollHour = State(initialValue: 96 + 7)  // 7 AM
             _scrollMinute = State(initialValue: 90 + 0)
@@ -109,6 +112,16 @@ struct AlarmEditView: View {
                             Text(soundDisplayName)
                                 .foregroundColor(.secondary)
                         }
+                    }
+
+                    // Bottom Row Label (inline editing)
+                    HStack {
+                        Text("Bottom Row")
+                        Spacer()
+                        TextField("Instructions", text: $bottomRowLabel)
+                            .multilineTextAlignment(.trailing)
+                            .foregroundColor(.secondary)
+                            .textInputAutocapitalization(.sentences)
                     }
 
                     // Snooze toggle (inline, no navigation)
@@ -315,7 +328,8 @@ struct AlarmEditView: View {
             label: label,
             snoozeEnabled: snoozeEnabled,
             permanentlyDisabled: false,  // Clear permanent disable flag when editing
-            scheduledDate: scheduledDate
+            scheduledDate: scheduledDate,
+            bottomRowLabel: bottomRowLabel
         )
 
         guard newAlarm.isValid else {

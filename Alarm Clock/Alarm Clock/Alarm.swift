@@ -19,10 +19,11 @@ struct Alarm: Identifiable, Codable {
     var snoozeEnabled: Bool  // Is snooze enabled for this alarm?
     var permanentlyDisabled: Bool  // One-shot alarms permanently disabled after firing
     var scheduledDate: Date?  // Absolute scheduled time for one-shot alarms (nil for repeating alarms)
+    var bottomRowLabel: String  // Custom bottom row text (replaces instructions when alarm rings)
 
     // MARK: - Initialization
 
-    init(id: Int = 0, hour: Int = 7, minute: Int = 0, daysOfWeek: Int = 0x7F, sound: String = "tone1", enabled: Bool = true, label: String = "Alarm", snoozeEnabled: Bool = true, permanentlyDisabled: Bool = false, scheduledDate: Date? = nil) {
+    init(id: Int = 0, hour: Int = 7, minute: Int = 0, daysOfWeek: Int = 0x7F, sound: String = "tone1", enabled: Bool = true, label: String = "Alarm", snoozeEnabled: Bool = true, permanentlyDisabled: Bool = false, scheduledDate: Date? = nil, bottomRowLabel: String = "") {
         self.id = id
         self.hour = hour
         self.minute = minute
@@ -33,6 +34,7 @@ struct Alarm: Identifiable, Codable {
         self.snoozeEnabled = snoozeEnabled
         self.permanentlyDisabled = permanentlyDisabled
         self.scheduledDate = scheduledDate
+        self.bottomRowLabel = bottomRowLabel
     }
 
     // MARK: - Computed Properties
@@ -148,7 +150,8 @@ struct Alarm: Identifiable, Codable {
             "enabled": enabled,
             "label": label,
             "snooze": snoozeEnabled,
-            "perm_disabled": permanentlyDisabled
+            "perm_disabled": permanentlyDisabled,
+            "bottomRowLabel": bottomRowLabel
         ]
     }
 
@@ -176,10 +179,11 @@ struct Alarm: Identifiable, Codable {
         let label = json["label"] as? String ?? "Alarm"
         let snoozeEnabled = json["snooze"] as? Bool ?? true
         let permanentlyDisabled = json["perm_disabled"] as? Bool ?? false
+        let bottomRowLabel = json["bottomRowLabel"] as? String ?? ""
 
         // scheduledDate is not transmitted via BLE - it's iOS-only metadata
         // It will be recalculated when the alarm is saved in iOS
-        return Alarm(id: id, hour: hour, minute: minute, daysOfWeek: days, sound: sound, enabled: enabled, label: label, snoozeEnabled: snoozeEnabled, permanentlyDisabled: permanentlyDisabled, scheduledDate: nil)
+        return Alarm(id: id, hour: hour, minute: minute, daysOfWeek: days, sound: sound, enabled: enabled, label: label, snoozeEnabled: snoozeEnabled, permanentlyDisabled: permanentlyDisabled, scheduledDate: nil, bottomRowLabel: bottomRowLabel)
     }
 
     // MARK: - Validation

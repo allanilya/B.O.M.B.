@@ -67,6 +67,7 @@ private:
     BLECharacteristic* _pVolumeCharacteristic;
     BLECharacteristic* _pTestSoundCharacteristic;
     BLECharacteristic* _pDisplayMessageCharacteristic;
+    BLECharacteristic* _pBottomRowLabelCharacteristic;
     BLECharacteristic* _pAlarmSetCharacteristic;
     BLECharacteristic* _pAlarmListCharacteristic;
     BLECharacteristic* _pAlarmDeleteCharacteristic;
@@ -81,6 +82,7 @@ private:
     static const char* VOLUME_CHAR_UUID;
     static const char* TEST_SOUND_CHAR_UUID;
     static const char* DISPLAY_MESSAGE_CHAR_UUID;
+    static const char* BOTTOM_ROW_LABEL_CHAR_UUID;
     static const char* ALARM_SERVICE_UUID;
     static const char* ALARM_SET_CHAR_UUID;
     static const char* ALARM_LIST_CHAR_UUID;
@@ -154,6 +156,15 @@ private:
     class DisplayMessageCharCallbacks : public BLECharacteristicCallbacks {
     public:
         DisplayMessageCharCallbacks(BLETimeSync* parent) : _parent(parent) {}
+        void onWrite(BLECharacteristic* pCharacteristic);
+    private:
+        BLETimeSync* _parent;
+    };
+
+    // Bottom Row Label characteristic callbacks
+    class BottomRowLabelCharCallbacks : public BLECharacteristicCallbacks {
+    public:
+        BottomRowLabelCharCallbacks(BLETimeSync* parent) : _parent(parent) {}
         void onWrite(BLECharacteristic* pCharacteristic);
     private:
         BLETimeSync* _parent;
