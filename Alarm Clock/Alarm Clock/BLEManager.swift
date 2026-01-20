@@ -639,28 +639,35 @@ class BLEManager: NSObject, ObservableObject {
     }
     
     private func parseFileList(from data: Data) {
+        print("BLEManager: Received file list data (\(data.count) bytes)")
+
         guard let jsonString = String(data: data, encoding: .utf8),
               let jsonData = jsonString.data(using: .utf8) else {
-            print("BLEManager: Failed to decode file list")
+            print("BLEManager: Failed to decode file list data")
             return
         }
-        
+
+        print("BLEManager: File list JSON: \(jsonString)")
+
         do {
             if let fileArray = try JSONSerialization.jsonObject(with: jsonData) as? [[String: Any]] {
                 var sounds: [String] = []
                 for fileInfo in fileArray {
                     if let filename = fileInfo["filename"] as? String {
                         sounds.append(filename)
+                        print("BLEManager:   Found file: \(filename)")
                     }
                 }
-                
+
                 DispatchQueue.main.async { [weak self] in
                     self?.availableCustomSounds = sounds.sorted()
-                    print("BLEManager: Updated custom sounds list: \(sounds)")
+                    print("BLEManager: ✅ Updated custom sounds list (\(sounds.count) files): \(sounds)")
                 }
+            } else {
+                print("BLEManager: File list JSON is not an array")
             }
         } catch {
-            print("BLEManager: Error parsing file list: \(error)")
+            print("BLEManager: Error parsing file list JSON: \(error)")
         }
     }
 }
@@ -899,6 +906,12 @@ extension BLEManager: CBPeripheralDelegate {
             // Auto-sync time and push iOS alarms to ESP32
             autoSyncTime()
             pushAlarmsToESP32()
+
+            // Request file list after connection is ready
+            if let fileListChar = fileListCharacteristic {
+                peripheral.readValue(for: fileListChar)
+                print("BLEManager: Requesting file list after connection ready")
+            }
         }
     }
 

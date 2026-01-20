@@ -214,24 +214,33 @@ bool AudioTest::playFile(const String& path, bool loop) {
         return false;
     }
 
-    // Stop any tone playback and uninstall I2S driver for tones
-    if (_currentSoundType == SOUND_TYPE_TONE) {
-        i2s_zero_dma_buffer(I2S_PORT);
-        i2s_driver_uninstall(I2S_PORT);
-        Serial.println("Uninstalled tone I2S driver to make room for file playback");
-    }
-
     // Stop any existing file playback
     if (_currentSoundType == SOUND_TYPE_FILE) {
         stopFile();
+        // stopFile() will have reinstalled tone I2S driver
     }
 
-    // Create AudioOutputI2S for file playback (if not already created)
+    // Uninstall tone I2S driver before creating AudioOutputI2S
+    // This is needed whether we're switching from tone mode OR from idle (first playback)
     if (audioOut == nullptr) {
+        Serial.println("Need to switch from tone I2S to file I2S...");
+
+        // Clear buffer and uninstall tone I2S driver
+        i2s_zero_dma_buffer(I2S_PORT);
+        esp_err_t err = i2s_driver_uninstall(I2S_PORT);
+        if (err == ESP_OK) {
+            Serial.println("Uninstalled tone I2S driver successfully");
+        } else {
+            Serial.printf("Warning: i2s_driver_uninstall returned error %d (may already be uninstalled)\n", err);
+        }
+        delay(100);  // Give I2S hardware time to fully reset
+
+        // Create AudioOutputI2S for file playback
+        Serial.println("Creating AudioOutputI2S for file playback...");
         audioOut = new AudioOutputI2S();
         audioOut->SetPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
         audioOut->SetGain((_volume / 100.0f) * 4.0f);
-        Serial.println("Created AudioOutputI2S for file playback");
+        Serial.println("AudioOutputI2S created successfully");
     }
 
     // Strip /spiffs prefix if present (SPIFFS.exists doesn't use it)

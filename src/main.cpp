@@ -144,6 +144,10 @@ void setup() {
         } else {
             Serial.println("No custom sound files found (upload via PlatformIO)");
         }
+
+        // Update BLE file list now that FileManager is ready
+        Serial.println("\nUpdating BLE file list...");
+        bleSync.updateFileList();
     } else {
         Serial.println("ERROR: Failed to initialize FileManager!");
     }
