@@ -48,6 +48,7 @@ class BLEManager: NSObject, ObservableObject {
     private let testSoundCharUUID = CBUUID(string: "12340004-1234-5678-1234-56789abcdef0")
     private let displayMessageCharUUID = CBUUID(string: "12340005-1234-5678-1234-56789abcdef0")
     private let bottomRowLabelCharUUID = CBUUID(string: "12340006-1234-5678-1234-56789abcdef0")
+    private let brightnessCharUUID = CBUUID(string: "12340007-1234-5678-1234-56789abcdef0")
 
     private let alarmServiceUUID = CBUUID(string: "12340010-1234-5678-1234-56789abcdef0")
     private let alarmSetCharUUID = CBUUID(string: "12340011-1234-5678-1234-56789abcdef0")
@@ -72,6 +73,7 @@ class BLEManager: NSObject, ObservableObject {
     private var testSoundCharacteristic: CBCharacteristic?
     private var displayMessageCharacteristic: CBCharacteristic?
     private var bottomRowLabelCharacteristic: CBCharacteristic?
+    private var brightnessCharacteristic: CBCharacteristic?
     private var alarmSetCharacteristic: CBCharacteristic?
     private var alarmListCharacteristic: CBCharacteristic?
     private var alarmDeleteCharacteristic: CBCharacteristic?
@@ -82,6 +84,9 @@ class BLEManager: NSObject, ObservableObject {
 
     // Volume tracking
     private var currentVolume: Int = 70
+
+    // Brightness tracking
+    private var currentBrightness: Int = 50
 
     // Auto-reconnect
     private var shouldAutoReconnect = true
@@ -383,6 +388,31 @@ class BLEManager: NSObject, ObservableObject {
     /// Get current volume level
     func getCurrentVolume() -> Int {
         return currentVolume
+    }
+
+    // MARK: - Brightness Control
+
+    /// Set brightness on ESP32 frontlight (0-100%)
+    func setBrightness(_ brightness: Int) {
+        guard let characteristic = brightnessCharacteristic else {
+            lastError = "Brightness characteristic not found"
+            return
+        }
+
+        guard brightness >= 0 && brightness <= 100 else {
+            lastError = "Invalid brightness (must be 0-100)"
+            return
+        }
+
+        let data = Data([UInt8(brightness)])
+        connectedPeripheral?.writeValue(data, for: characteristic, type: .withResponse)
+        currentBrightness = brightness
+        print("BLEManager: Set brightness to \(brightness)%")
+    }
+
+    /// Get current brightness level
+    func getCurrentBrightness() -> Int {
+        return currentBrightness
     }
 
     /// Set display message on ESP32
@@ -735,6 +765,7 @@ extension BLEManager: CBCentralManagerDelegate {
             // Clear characteristics
             self?.timeCharacteristic = nil
             self?.dateTimeCharacteristic = nil
+            self?.brightnessCharacteristic = nil
             self?.alarmSetCharacteristic = nil
             self?.alarmListCharacteristic = nil
             self?.alarmDeleteCharacteristic = nil
@@ -773,7 +804,7 @@ extension BLEManager: CBPeripheralDelegate {
             print("BLEManager: Service UUID: \(service.uuid)")
             if service.uuid == timeServiceUUID {
                 print("BLEManager: Discovering Time service characteristics...")
-                peripheral.discoverCharacteristics([timeCharUUID, dateTimeCharUUID, volumeCharUUID, testSoundCharUUID, displayMessageCharUUID, bottomRowLabelCharUUID], for: service)
+                peripheral.discoverCharacteristics([timeCharUUID, dateTimeCharUUID, volumeCharUUID, testSoundCharUUID, displayMessageCharUUID, bottomRowLabelCharUUID, brightnessCharUUID], for: service)
             } else if service.uuid == alarmServiceUUID {
                 print("BLEManager: Discovering Alarm service characteristics...")
                 peripheral.discoverCharacteristics([alarmSetCharUUID, alarmListCharUUID, alarmDeleteCharUUID], for: service)
@@ -797,6 +828,7 @@ extension BLEManager: CBPeripheralDelegate {
         print("BLEManager: Discovered \(characteristics.count) characteristics for service \(service.uuid)")
 
         for characteristic in characteristics {
+            print("BLEManager: Found characteristic: \(characteristic.uuid)")
             if characteristic.uuid == timeCharUUID {
                 timeCharacteristic = characteristic
                 print("BLEManager: Found Time characteristic")
@@ -821,6 +853,11 @@ extension BLEManager: CBPeripheralDelegate {
                 print("BLEManager: Found BottomRowLabel characteristic")
                 // Read current bottom row label
                 peripheral.readValue(for: characteristic)
+            } else if characteristic.uuid == brightnessCharUUID {
+                brightnessCharacteristic = characteristic
+                print("BLEManager: Found Brightness characteristic")
+                // Read current brightness
+                peripheral.readValue(for: characteristic)
             } else if characteristic.uuid == alarmSetCharUUID {
                 alarmSetCharacteristic = characteristic
                 print("BLEManager: Found AlarmSet characteristic")
@@ -842,7 +879,8 @@ extension BLEManager: CBPeripheralDelegate {
             } else if characteristic.uuid == fileListCharUUID {
                 fileListCharacteristic = characteristic
                 print("BLEManager: Found FileList characteristic")
-                // Read file list
+                // Subscribe to notifications and read current value
+                peripheral.setNotifyValue(true, for: characteristic)
                 peripheral.readValue(for: characteristic)
             }
         }
@@ -875,6 +913,15 @@ extension BLEManager: CBPeripheralDelegate {
             if let data = characteristic.value, let vol = data.first {
                 currentVolume = Int(vol)
                 print("BLEManager: Read volume from ESP32: \(currentVolume)%")
+            }
+            return
+        }
+
+        // Handle brightness characteristic read
+        if characteristic.uuid == brightnessCharUUID {
+            if let data = characteristic.value, let bright = data.first {
+                currentBrightness = Int(bright)
+                print("BLEManager: Read brightness from ESP32: \(currentBrightness)%")
             }
             return
         }

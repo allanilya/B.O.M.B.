@@ -56,10 +56,34 @@ class AudioConverter {
     ///   - url: URL to source file
     ///   - completion: Completion handler with Result containing M4A data and suggested filename
     static func convertToMP3(url: URL, completion: @escaping (Result<(data: Data, filename: String), AudioConverterError>) -> Void) {
-        
-        // Load asset using modern API
+
+        // Check if file is already MP3 or WAV - if so, just pass it through without conversion
+        let fileExtension = url.pathExtension.lowercased()
+        if fileExtension == "mp3" || fileExtension == "wav" {
+            do {
+                let data = try Data(contentsOf: url)
+
+                // Check size limit
+                if data.count > maxFileSize {
+                    completion(.failure(.fileTooLarge))
+                    return
+                }
+
+                let originalFilename = url.deletingPathExtension().lastPathComponent
+                let outputFilename = sanitizeFilename(originalFilename) + ".\(fileExtension)"
+                completion(.success((data: data, filename: outputFilename)))
+                return
+            } catch {
+                completion(.failure(.conversionFailed))
+                return
+            }
+        }
+
+        // For other formats (video, M4A, etc.), convert to WAV
+        // Note: WAV is uncompressed but guaranteed compatibility with ESP32
+        // Users should upload MP3 files directly for optimal compression
         let asset = AVURLAsset(url: url)
-        
+
         // Check if file has audio track (async check)
         Task {
             do {
@@ -68,27 +92,27 @@ class AudioConverter {
                     completion(.failure(.noAudioTrack))
                     return
                 }
-                
+
                 // Generate output filename
                 let originalFilename = url.deletingPathExtension().lastPathComponent
-                let outputFilename = sanitizeFilename(originalFilename) + ".m4a"
-                
+                let outputFilename = sanitizeFilename(originalFilename) + ".wav"
+
                 // Create temporary output URL
                 let tempDir = FileManager.default.temporaryDirectory
-                let outputURL = tempDir.appendingPathComponent(UUID().uuidString + ".m4a")
-                
+                let outputURL = tempDir.appendingPathComponent(UUID().uuidString + ".wav")
+
                 // Remove existing file if present
                 try? FileManager.default.removeItem(at: outputURL)
-                
-                // Create export session
-                guard let exportSession = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
+
+                // Create export session for WAV
+                guard let exportSession = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetPassthrough) else {
                     completion(.failure(.conversionFailed))
                     return
                 }
-                
+
                 exportSession.outputURL = outputURL
-                exportSession.outputFileType = .m4a
-                
+                exportSession.outputFileType = .wav
+
                 // Export audio using modern async API
                 await performExport(session: exportSession, outputURL: outputURL, asset: asset, outputFilename: outputFilename, completion: completion)
                 
@@ -101,7 +125,10 @@ class AudioConverter {
     /// Perform export using modern async API
     private static func performExport(session: AVAssetExportSession, outputURL: URL, asset: AVAsset, outputFilename: String, completion: @escaping (Result<(data: Data, filename: String), AudioConverterError>) -> Void) async {
         do {
-            try await session.export(to: outputURL, as: .m4a)
+            // Determine file type from output URL extension
+            let fileExtension = outputURL.pathExtension.lowercased()
+            let fileType: AVFileType = fileExtension == "wav" ? .wav : .m4a
+            try await session.export(to: outputURL, as: fileType)
             
             // Read exported file
             guard let data = try? Data(contentsOf: outputURL) else {
@@ -111,18 +138,12 @@ class AudioConverter {
             
             // Clean up temporary file
             try? FileManager.default.removeItem(at: outputURL)
-            
+
             // Check file size
             if data.count > maxFileSize {
-                // Try to compress by converting to lower quality
-                compressAudio(asset: asset, targetSize: maxFileSize) { result in
-                    switch result {
-                    case .success(let compressedData):
-                        completion(.success((data: compressedData, filename: outputFilename)))
-                    case .failure(_):
-                        completion(.failure(.fileTooLarge))
-                    }
-                }
+                // WAV files are uncompressed, can't compress further
+                // Just fail with fileTooLarge error
+                completion(.failure(.fileTooLarge))
             } else {
                 // File size is acceptable
                 completion(.success((data: data, filename: outputFilename)))
@@ -191,7 +212,7 @@ class AudioConverter {
         let allowedChars = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_-"))
         sanitized = sanitized.components(separatedBy: allowedChars.inverted).joined()
         
-        // Limit length to 19 characters (SPIFFS path limit: 31 chars - 8 for "/alarms/" - 4 for ".m4a" = 19)
+        // Limit length to 19 characters (SPIFFS path limit: 31 chars - 8 for "/alarms/" - 4 for extension = 19)
         if sanitized.count > 19 {
             sanitized = String(sanitized.prefix(19))
         }

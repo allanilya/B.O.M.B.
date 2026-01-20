@@ -116,6 +116,7 @@ bool BLETimeSync::begin(const char* deviceName) {
     );
     _pDisplayMessageCharacteristic->setCallbacks(new DisplayMessageCharCallbacks(this));
     _pDisplayMessageCharacteristic->setValue(displayManager.getCustomMessage().c_str());
+    Serial.println("BLE: Created DisplayMessage characteristic (12340005)");
 
     // Create Bottom Row Label Characteristic (Read/Write: custom label for bottom row, max 50 chars)
     _pBottomRowLabelCharacteristic = _pTimeService->createCharacteristic(
@@ -124,6 +125,7 @@ bool BLETimeSync::begin(const char* deviceName) {
     );
     _pBottomRowLabelCharacteristic->setCallbacks(new BottomRowLabelCharCallbacks(this));
     _pBottomRowLabelCharacteristic->setValue(displayManager.getBottomRowLabel().c_str());
+    Serial.println("BLE: Created BottomRowLabel characteristic (12340006)");
 
     // Create Brightness Characteristic (Read/Write: 0-100%)
     _pBrightnessCharacteristic = _pTimeService->createCharacteristic(
@@ -134,6 +136,7 @@ bool BLETimeSync::begin(const char* deviceName) {
     _pBrightnessCharacteristic->addDescriptor(new BLE2902());
     uint32_t initialBrightness = (uint32_t)frontlightManager.getBrightness();
     _pBrightnessCharacteristic->setValue(initialBrightness);
+    Serial.println("BLE: Created Brightness characteristic (12340007)");
 
     // Set initial value
     time_t currentTime = time(nullptr);
@@ -141,7 +144,9 @@ bool BLETimeSync::begin(const char* deviceName) {
     _pTimeCharacteristic->setValue(timeValue);
 
     // Start the time service
+    Serial.println("BLE: Starting Time service with 7 characteristics...");
     _pTimeService->start();
+    Serial.println("BLE: Time service started successfully");
 
     // Create BLE Alarm Service
     _pAlarmService = _pServer->createService(ALARM_SERVICE_UUID);
@@ -197,11 +202,12 @@ bool BLETimeSync::begin(const char* deviceName) {
     _pFileStatusCharacteristic->addDescriptor(new BLE2902());
     _pFileStatusCharacteristic->setValue("READY");
 
-    // Create File List Characteristic (Read: JSON array of available sounds)
+    // Create File List Characteristic (Read + Notify: JSON array of available sounds)
     _pFileListCharacteristic = _pFileService->createCharacteristic(
         FILE_LIST_CHAR_UUID,
-        BLECharacteristic::PROPERTY_READ
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
     );
+    _pFileListCharacteristic->addDescriptor(new BLE2902());
 
     // Start the file service
     _pFileService->start();
@@ -310,9 +316,12 @@ void BLETimeSync::updateFileList() {
     json += "]";
 
     _pFileListCharacteristic->setValue(json.c_str());
+    _pFileListCharacteristic->notify();  // Notify iOS app of file list update
     Serial.print("BLE: Updated file list (");
     Serial.print(files.size());
     Serial.println(" files)");
+    Serial.print("BLE: File list JSON: ");
+    Serial.println(json);
 }
 
 bool BLETimeSync::isFileTransferring() {

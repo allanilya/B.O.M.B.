@@ -10,6 +10,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var bleManager: BLEManager
     @State private var volume: Double = 70
+    @State private var brightness: Double = 50
 
     var body: some View {
         NavigationView {
@@ -43,6 +44,56 @@ struct SettingsView: View {
 
                         if !bleManager.isConnected {
                             Text("Connect to ESP32 to adjust volume")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                Section(header: Text("Display Brightness")) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Brightness")
+                            Spacer()
+                            Text("\(Int(brightness))%")
+                                .foregroundColor(.secondary)
+                                .font(.headline)
+                        }
+
+                        Slider(value: $brightness, in: 0...100, step: 1)
+                            .onChange(of: brightness) {
+                                bleManager.setBrightness(Int(brightness))
+                            }
+
+                        HStack(spacing: 10) {
+                            Button {
+                                brightness = 0
+                                bleManager.setBrightness(0)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "lightbulb.slash")
+                                    Text("Off")
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button {
+                                brightness = 100
+                                bleManager.setBrightness(100)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "lightbulb.max")
+                                    Text("Max")
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .disabled(!bleManager.isConnected)
+
+                        if !bleManager.isConnected {
+                            Text("Connect to ESP32 to adjust brightness")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -152,8 +203,9 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .onAppear {
-                // Load current volume from BLE manager
+                // Load current volume and brightness from BLE manager
                 volume = Double(bleManager.getCurrentVolume())
+                brightness = Double(bleManager.getCurrentBrightness())
             }
         }
     }

@@ -70,13 +70,10 @@ bool AudioTest::begin() {
     _volume = prefs.getUChar("volume", 70);  // Default 70%
     prefs.end();
 
-    // Initialize ESP8266Audio library for file playback
-    // Note: We'll create the output on-demand when playing files
-    audioOut = new AudioOutputI2S();
-    audioOut->SetPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-    audioOut->SetGain((_volume / 100.0f) * 4.0f);  // Volume scale 0-4
+    // Note: We'll create AudioOutputI2S on-demand when playing files
+    // Don't initialize it here because it conflicts with tone I2S driver
 
-    Serial.println("Audio library initialized for file playback");
+    Serial.println("Audio library ready (will initialize on-demand for file playback)");
 
     _initialized = true;
     Serial.print("I2S initialized successfully! Volume: ");
@@ -118,47 +115,12 @@ void AudioTest::playTone(uint16_t frequency, uint32_t duration) {
         return;
     }
 
-    // Stop any file playback first
+    // Stop any file playback first (this will reinstall tone I2S driver)
     if (_currentSoundType == SOUND_TYPE_FILE) {
         stopFile();
     }
 
-    // CRITICAL: Temporarily delete AudioOutputI2S to avoid I2S conflict
-    // The ESP8266Audio library reconfigures I2S internally, which breaks
-    // direct i2s_write() calls. We need to free it before using direct I2S.
-    bool needToReinitAudioOut = (audioOut != nullptr);
-    if (needToReinitAudioOut) {
-        delete audioOut;
-        audioOut = nullptr;
-    }
-
-    // Reinstall I2S driver for tone generation
-    // (AudioOutputI2S may have modified the I2S configuration)
-    i2s_driver_uninstall(I2S_PORT);
-
-    i2s_config_t i2s_config = {
-        .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
-        .sample_rate = SAMPLE_RATE,
-        .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
-        .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
-        .communication_format = I2S_COMM_FORMAT_STAND_I2S,
-        .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-        .dma_buf_count = 8,
-        .dma_buf_len = 64,
-        .use_apll = false,
-        .tx_desc_auto_clear = true,
-        .fixed_mclk = 0
-    };
-
-    i2s_pin_config_t pin_config = {
-        .bck_io_num = I2S_BCLK,
-        .ws_io_num = I2S_LRC,
-        .data_out_num = I2S_DOUT,
-        .data_in_num = I2S_PIN_NO_CHANGE
-    };
-
-    i2s_driver_install(I2S_PORT, &i2s_config, 0, NULL);
-    i2s_set_pin(I2S_PORT, &pin_config);
+    // Clear DMA buffer (I2S driver is already installed for tones)
     i2s_zero_dma_buffer(I2S_PORT);
 
     _currentSoundType = SOUND_TYPE_TONE;
@@ -186,13 +148,6 @@ void AudioTest::playTone(uint16_t frequency, uint32_t duration) {
 
     // Clear DMA buffer to stop sound
     i2s_zero_dma_buffer(I2S_PORT);
-
-    // Reinstall AudioOutputI2S for file playback
-    if (needToReinitAudioOut) {
-        audioOut = new AudioOutputI2S();
-        audioOut->SetPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-        audioOut->SetGain((_volume / 100.0f) * 4.0f);
-    }
 
     _currentSoundType = SOUND_TYPE_NONE;
     Serial.println("Tone finished.");
@@ -259,14 +214,11 @@ bool AudioTest::playFile(const String& path, bool loop) {
         return false;
     }
 
-    if (audioOut == nullptr) {
-        Serial.println("ERROR: Audio output not initialized!");
-        return false;
-    }
-
-    // Stop any tone playback first
+    // Stop any tone playback and uninstall I2S driver for tones
     if (_currentSoundType == SOUND_TYPE_TONE) {
         i2s_zero_dma_buffer(I2S_PORT);
+        i2s_driver_uninstall(I2S_PORT);
+        Serial.println("Uninstalled tone I2S driver to make room for file playback");
     }
 
     // Stop any existing file playback
@@ -274,19 +226,33 @@ bool AudioTest::playFile(const String& path, bool loop) {
         stopFile();
     }
 
+    // Create AudioOutputI2S for file playback (if not already created)
+    if (audioOut == nullptr) {
+        audioOut = new AudioOutputI2S();
+        audioOut->SetPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+        audioOut->SetGain((_volume / 100.0f) * 4.0f);
+        Serial.println("Created AudioOutputI2S for file playback");
+    }
+
+    // Strip /spiffs prefix if present (SPIFFS.exists doesn't use it)
+    String spiffsPath = path;
+    if (spiffsPath.startsWith("/spiffs")) {
+        spiffsPath = spiffsPath.substring(7);  // Remove "/spiffs"
+    }
+
     // Check if file exists
-    if (!SPIFFS.exists(path)) {
-        Serial.printf("ERROR: File not found: %s\n", path.c_str());
+    if (!SPIFFS.exists(spiffsPath)) {
+        Serial.printf("ERROR: File not found: %s (checked: %s)\n", path.c_str(), spiffsPath.c_str());
         return false;
     }
 
     Serial.printf("Playing file: %s (loop=%d)\n", path.c_str(), loop);
 
-    // Store file path for looping
-    _currentFilePath = path;
+    // Store file path for looping (use SPIFFS path without /spiffs prefix)
+    _currentFilePath = spiffsPath;
 
     // Create file source
-    audioFile = new AudioFileSourceSPIFFS(path.c_str());
+    audioFile = new AudioFileSourceSPIFFS(spiffsPath.c_str());
     if (!audioFile) {
         Serial.println("ERROR: Failed to open audio file!");
         return false;
@@ -352,6 +318,39 @@ void AudioTest::stopFile() {
             delete audioFile;
             audioFile = nullptr;
         }
+
+        // Clean up AudioOutputI2S
+        if (audioOut != nullptr) {
+            delete audioOut;
+            audioOut = nullptr;
+            Serial.println("Deleted AudioOutputI2S");
+        }
+
+        // Reinstall I2S driver for tone generation
+        i2s_config_t i2s_config = {
+            .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
+            .sample_rate = SAMPLE_RATE,
+            .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
+            .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
+            .communication_format = I2S_COMM_FORMAT_STAND_I2S,
+            .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
+            .dma_buf_count = 8,
+            .dma_buf_len = 64,
+            .use_apll = false,
+            .tx_desc_auto_clear = true,
+            .fixed_mclk = 0
+        };
+
+        i2s_pin_config_t pin_config = {
+            .bck_io_num = I2S_BCLK,
+            .ws_io_num = I2S_LRC,
+            .data_out_num = I2S_DOUT,
+            .data_in_num = I2S_PIN_NO_CHANGE
+        };
+
+        i2s_driver_install(I2S_PORT, &i2s_config, 0, NULL);
+        i2s_set_pin(I2S_PORT, &pin_config);
+        Serial.println("Reinstalled tone I2S driver");
 
         _currentSoundType = SOUND_TYPE_NONE;
         _loopFile = false;
