@@ -204,6 +204,7 @@ void loop() {
     static bool wasRingingLastLoop = false;  // Track alarm state
     static bool displayUpdatedForAlarm = false;  // Track if alarm display shown
     static unsigned long pendingSingleClickTime = 0;  // Track pending snooze
+    static uint8_t alarmStartVolume = 0;  // Capture volume when alarm starts
     unsigned long now = millis();
 
     // Update BLE

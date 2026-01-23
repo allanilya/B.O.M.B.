@@ -895,6 +895,7 @@ extension BLEManager: CBPeripheralDelegate {
         // Check if all core characteristics are discovered
         if timeCharacteristic != nil && dateTimeCharacteristic != nil &&
            volumeCharacteristic != nil && testSoundCharacteristic != nil &&
+           brightnessCharacteristic != nil &&
            alarmSetCharacteristic != nil && alarmListCharacteristic != nil &&
            alarmDeleteCharacteristic != nil {
 
