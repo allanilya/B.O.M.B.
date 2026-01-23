@@ -44,11 +44,12 @@ class BLEManager: NSObject, ObservableObject {
     private let timeCharUUID = CBUUID(string: "12340001-1234-5678-1234-56789abcdef0")
     private let dateTimeCharUUID = CBUUID(string: "12340002-1234-5678-1234-56789abcdef0")
 
-    private let volumeCharUUID = CBUUID(string: "12340003-1234-5678-1234-56789abcdef0")
-    private let testSoundCharUUID = CBUUID(string: "12340004-1234-5678-1234-56789abcdef0")
-    private let displayMessageCharUUID = CBUUID(string: "12340005-1234-5678-1234-56789abcdef0")
-    private let bottomRowLabelCharUUID = CBUUID(string: "12340006-1234-5678-1234-56789abcdef0")
-    private let brightnessCharUUID = CBUUID(string: "12340007-1234-5678-1234-56789abcdef0")
+    private let settingsServiceUUID = CBUUID(string: "12340030-1234-5678-1234-56789abcdef0")
+    private let volumeCharUUID = CBUUID(string: "12340031-1234-5678-1234-56789abcdef0")
+    private let testSoundCharUUID = CBUUID(string: "12340032-1234-5678-1234-56789abcdef0")
+    private let displayMessageCharUUID = CBUUID(string: "12340033-1234-5678-1234-56789abcdef0")
+    private let bottomRowLabelCharUUID = CBUUID(string: "12340034-1234-5678-1234-56789abcdef0")
+    private let brightnessCharUUID = CBUUID(string: "12340035-1234-5678-1234-56789abcdef0")
 
     private let alarmServiceUUID = CBUUID(string: "12340010-1234-5678-1234-56789abcdef0")
     private let alarmSetCharUUID = CBUUID(string: "12340011-1234-5678-1234-56789abcdef0")
@@ -87,6 +88,9 @@ class BLEManager: NSObject, ObservableObject {
 
     // Brightness tracking
     private var currentBrightness: Int = 50
+
+    // Test sound state tracking
+    @Published private(set) var isTestSoundPlaying: Bool = false
 
     // Auto-reconnect
     private var shouldAutoReconnect = true
@@ -462,26 +466,43 @@ class BLEManager: NSObject, ObservableObject {
 
     /// Trigger test sound with specific sound name (tone1, tone2, tone3)
     func testSound(soundName: String) {
-        guard let characteristic = testSoundCharacteristic else {
-            lastError = "TestSound characteristic not found"
+        guard let characteristic = testSoundCharacteristic,
+              let peripheral = connectedPeripheral else {
+            print("BLEManager: ERROR - Test sound characteristic is NIL!")
             return
         }
 
-        // First stop any ongoing sound by sending empty string
-        if let stopData = "stop".data(using: .utf8) {
-            connectedPeripheral?.writeValue(stopData, for: characteristic, type: .withoutResponse)
+        // If test sound already playing, stop it instead of queueing
+        if isTestSoundPlaying {
+            print("BLEManager: Stopping test sound (user pressed again)")
+            if let stopData = "stop".data(using: .utf8) {
+                peripheral.writeValue(stopData, for: characteristic, type: .withResponse)
+            }
+            isTestSoundPlaying = false
+            return
         }
 
-        // Small delay to ensure stop command is processed
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+        // Mark test sound as playing
+        isTestSoundPlaying = true
+
+        // Send stop first to clear any previous sound
+        if let stopData = "stop".data(using: .utf8) {
+            peripheral.writeValue(stopData, for: characteristic, type: .withResponse)
+        }
+
+        // Wait 100ms (increased from 50ms) for stop to process
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             guard let self = self else { return }
-            guard let data = soundName.data(using: .utf8) else {
-                self.lastError = "Failed to encode sound name"
-                return
+
+            if let soundData = soundName.data(using: .utf8) {
+                peripheral.writeValue(soundData, for: characteristic, type: .withResponse)
+                print("BLEManager: Playing test sound: \(soundName)")
             }
 
-            self.connectedPeripheral?.writeValue(data, for: characteristic, type: .withResponse)
-            print("BLEManager: Triggered test sound '\(soundName)' on ESP32")
+            // Auto-stop flag after 3 seconds (safety timeout)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                self?.isTestSoundPlaying = false
+            }
         }
     }
 
@@ -748,7 +769,7 @@ extension BLEManager: CBCentralManagerDelegate {
         }
 
         // Discover services
-        peripheral.discoverServices([timeServiceUUID, alarmServiceUUID, fileServiceUUID])
+        peripheral.discoverServices([timeServiceUUID, settingsServiceUUID, alarmServiceUUID, fileServiceUUID])
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
@@ -811,7 +832,10 @@ extension BLEManager: CBPeripheralDelegate {
             print("BLEManager: Service UUID: \(service.uuid)")
             if service.uuid == timeServiceUUID {
                 print("BLEManager: Discovering Time service characteristics...")
-                peripheral.discoverCharacteristics([timeCharUUID, dateTimeCharUUID, volumeCharUUID, testSoundCharUUID, displayMessageCharUUID, bottomRowLabelCharUUID, brightnessCharUUID], for: service)
+                peripheral.discoverCharacteristics([timeCharUUID, dateTimeCharUUID], for: service)
+            } else if service.uuid == settingsServiceUUID {
+                print("BLEManager: Discovering Settings service characteristics...")
+                peripheral.discoverCharacteristics([volumeCharUUID, testSoundCharUUID, displayMessageCharUUID, bottomRowLabelCharUUID, brightnessCharUUID], for: service)
             } else if service.uuid == alarmServiceUUID {
                 print("BLEManager: Discovering Alarm service characteristics...")
                 peripheral.discoverCharacteristics([alarmSetCharUUID, alarmListCharUUID, alarmDeleteCharUUID], for: service)

@@ -8,6 +8,10 @@
 #include <BLE2902.h>
 #include <FS.h>
 
+// Forward declare AlarmManager to check alarm state in test sound handler
+class AlarmManager;
+extern AlarmManager alarmManager;
+
 /**
  * BLETimeSync - BLE service for time synchronization from iOS/Android
  *
@@ -73,6 +77,7 @@ public:
 private:
     BLEServer* _pServer;
     BLEService* _pTimeService;
+    BLEService* _pSettingsService;
     BLEService* _pAlarmService;
     BLEService* _pFileService;
     BLECharacteristic* _pTimeCharacteristic;
@@ -113,6 +118,7 @@ private:
     static const char* SERVICE_UUID;
     static const char* TIME_CHAR_UUID;
     static const char* DATETIME_CHAR_UUID;
+    static const char* SETTINGS_SERVICE_UUID;
     static const char* VOLUME_CHAR_UUID;
     static const char* TEST_SOUND_CHAR_UUID;
     static const char* DISPLAY_MESSAGE_CHAR_UUID;

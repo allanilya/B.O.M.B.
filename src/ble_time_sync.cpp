@@ -17,11 +17,14 @@ extern FrontlightManager frontlightManager;
 const char* BLETimeSync::SERVICE_UUID = "12340000-1234-5678-1234-56789abcdef0";
 const char* BLETimeSync::TIME_CHAR_UUID = "12340001-1234-5678-1234-56789abcdef0";
 const char* BLETimeSync::DATETIME_CHAR_UUID = "12340002-1234-5678-1234-56789abcdef0";
-const char* BLETimeSync::VOLUME_CHAR_UUID = "12340003-1234-5678-1234-56789abcdef0";
-const char* BLETimeSync::TEST_SOUND_CHAR_UUID = "12340004-1234-5678-1234-56789abcdef0";
-const char* BLETimeSync::DISPLAY_MESSAGE_CHAR_UUID = "12340005-1234-5678-1234-56789abcdef0";
-const char* BLETimeSync::BOTTOM_ROW_LABEL_CHAR_UUID = "12340006-1234-5678-1234-56789abcdef0";
-const char* BLETimeSync::BRIGHTNESS_CHAR_UUID = "12340007-1234-5678-1234-56789abcdef0";
+
+// BLE Settings Service UUID: Volume, brightness, display customization
+const char* BLETimeSync::SETTINGS_SERVICE_UUID = "12340030-1234-5678-1234-56789abcdef0";
+const char* BLETimeSync::VOLUME_CHAR_UUID = "12340031-1234-5678-1234-56789abcdef0";
+const char* BLETimeSync::TEST_SOUND_CHAR_UUID = "12340032-1234-5678-1234-56789abcdef0";
+const char* BLETimeSync::DISPLAY_MESSAGE_CHAR_UUID = "12340033-1234-5678-1234-56789abcdef0";
+const char* BLETimeSync::BOTTOM_ROW_LABEL_CHAR_UUID = "12340034-1234-5678-1234-56789abcdef0";
+const char* BLETimeSync::BRIGHTNESS_CHAR_UUID = "12340035-1234-5678-1234-56789abcdef0";
 
 // BLE Alarm Service UUID: Custom alarm management service
 const char* BLETimeSync::ALARM_SERVICE_UUID = "12340010-1234-5678-1234-56789abcdef0";
@@ -73,7 +76,7 @@ bool BLETimeSync::begin(const char* deviceName) {
     _pServer = BLEDevice::createServer();
     _pServer->setCallbacks(new ServerCallbacks(this));
 
-    // Create BLE Service
+    // Create BLE Time Service (just time sync)
     _pTimeService = _pServer->createService(SERVICE_UUID);
 
     // Create Time Characteristic (Unix timestamp - 32-bit integer)
@@ -92,8 +95,21 @@ bool BLETimeSync::begin(const char* deviceName) {
     _pDateTimeCharacteristic->setCallbacks(new DateTimeCharCallbacks(this));
     _pDateTimeCharacteristic->addDescriptor(new BLE2902());
 
+    // Set initial value
+    time_t currentTime = time(nullptr);
+    uint32_t timeValue = (uint32_t)currentTime;
+    _pTimeCharacteristic->setValue(timeValue);
+
+    // Start the time service
+    Serial.println("BLE: Starting Time service with 2 characteristics...");
+    _pTimeService->start();
+    Serial.println("BLE: Time service started successfully");
+
+    // Create BLE Settings Service (volume, brightness, display customization)
+    _pSettingsService = _pServer->createService(SETTINGS_SERVICE_UUID);
+
     // Create Volume Characteristic (0-100%)
-    _pVolumeCharacteristic = _pTimeService->createCharacteristic(
+    _pVolumeCharacteristic = _pSettingsService->createCharacteristic(
         VOLUME_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE
     );
@@ -103,32 +119,30 @@ bool BLETimeSync::begin(const char* deviceName) {
     _pVolumeCharacteristic->setValue(initialVolume);
 
     // Create Test Sound Characteristic (Write to trigger 2-second test tone)
-    _pTestSoundCharacteristic = _pTimeService->createCharacteristic(
+    _pTestSoundCharacteristic = _pSettingsService->createCharacteristic(
         TEST_SOUND_CHAR_UUID,
         BLECharacteristic::PROPERTY_WRITE
     );
     _pTestSoundCharacteristic->setCallbacks(new TestSoundCharCallbacks(this));
 
     // Create Display Message Characteristic (Read/Write: custom message for top row, max 100 chars)
-    _pDisplayMessageCharacteristic = _pTimeService->createCharacteristic(
+    _pDisplayMessageCharacteristic = _pSettingsService->createCharacteristic(
         DISPLAY_MESSAGE_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE
     );
     _pDisplayMessageCharacteristic->setCallbacks(new DisplayMessageCharCallbacks(this));
     _pDisplayMessageCharacteristic->setValue(displayManager.getCustomMessage().c_str());
-    Serial.println("BLE: Created DisplayMessage characteristic (12340005)");
 
     // Create Bottom Row Label Characteristic (Read/Write: custom label for bottom row, max 50 chars)
-    _pBottomRowLabelCharacteristic = _pTimeService->createCharacteristic(
+    _pBottomRowLabelCharacteristic = _pSettingsService->createCharacteristic(
         BOTTOM_ROW_LABEL_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE
     );
     _pBottomRowLabelCharacteristic->setCallbacks(new BottomRowLabelCharCallbacks(this));
     _pBottomRowLabelCharacteristic->setValue(displayManager.getBottomRowLabel().c_str());
-    Serial.println("BLE: Created BottomRowLabel characteristic (12340006)");
 
     // Create Brightness Characteristic (Read/Write: 0-100%)
-    _pBrightnessCharacteristic = _pTimeService->createCharacteristic(
+    _pBrightnessCharacteristic = _pSettingsService->createCharacteristic(
         BRIGHTNESS_CHAR_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE
     );
@@ -136,17 +150,11 @@ bool BLETimeSync::begin(const char* deviceName) {
     _pBrightnessCharacteristic->addDescriptor(new BLE2902());
     uint32_t initialBrightness = (uint32_t)frontlightManager.getBrightness();
     _pBrightnessCharacteristic->setValue(initialBrightness);
-    Serial.println("BLE: Created Brightness characteristic (12340007)");
 
-    // Set initial value
-    time_t currentTime = time(nullptr);
-    uint32_t timeValue = (uint32_t)currentTime;
-    _pTimeCharacteristic->setValue(timeValue);
-
-    // Start the time service
-    Serial.println("BLE: Starting Time service with 7 characteristics...");
-    _pTimeService->start();
-    Serial.println("BLE: Time service started successfully");
+    // Start the settings service
+    Serial.println("BLE: Starting Settings service with 5 characteristics...");
+    _pSettingsService->start();
+    Serial.println("BLE: Settings service started successfully");
 
     // Create BLE Alarm Service
     _pAlarmService = _pServer->createService(ALARM_SERVICE_UUID);
@@ -215,6 +223,7 @@ bool BLETimeSync::begin(const char* deviceName) {
     // Start advertising
     BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(SERVICE_UUID);
+    pAdvertising->addServiceUUID(SETTINGS_SERVICE_UUID);
     pAdvertising->addServiceUUID(ALARM_SERVICE_UUID);
     pAdvertising->addServiceUUID(FILE_SERVICE_UUID);
     pAdvertising->setScanResponse(true);
@@ -575,6 +584,15 @@ void BLETimeSync::VolumeCharCallbacks::onWrite(BLECharacteristic* pCharacteristi
 void BLETimeSync::TestSoundCharCallbacks::onWrite(BLECharacteristic* pCharacteristic) {
     std::string value = pCharacteristic->getValue();
     String soundName = String(value.c_str());
+
+    Serial.print(">>> BLE: Test sound requested: ");
+    Serial.println(soundName);
+
+    // Don't allow test sounds while alarm is ringing (prevents race condition)
+    if (alarmManager.isAlarmRinging()) {
+        Serial.println(">>> BLE: ERROR - Cannot play test sound while alarm is ringing");
+        return;  // Silently ignore test sound requests during alarm
+    }
 
     // Check for stop command
     if (soundName == "stop") {

@@ -277,6 +277,7 @@ void loop() {
     if (alarmManager.isAlarmRinging()) {
         // If alarm just started, initialize timer and show alarm display
         if (!wasRingingLastLoop) {
+            alarmStartVolume = audioObj.getVolume();  // Capture volume at alarm start
             lastToneStart = 0;  // Force immediate play
             wasRingingLastLoop = true;
             displayUpdatedForAlarm = false;  // Need to show alarm screen
@@ -307,10 +308,17 @@ void loop() {
             if (alarmManager.getAlarm(alarmId, alarm)) {
                 // Only play bursts for built-in tones (file playback handles looping)
                 if (alarm.sound == "tone1" || alarm.sound == "tone2" || alarm.sound == "tone3") {
+                    // Temporarily set volume to what it was when alarm started
+                    uint8_t currentUserVolume = audioObj.getVolume();
+                    audioObj.setVolume(alarmStartVolume);
+
                     // Use distinct frequencies: low (262), middle (440), high (880)
                     uint16_t frequency = (alarm.sound == "tone2") ? 440 :
                                        (alarm.sound == "tone3") ? 880 : 262;
                     audioObj.playTone(frequency, 50);  // 50ms burst
+
+                    // Restore user's current volume setting
+                    audioObj.setVolume(currentUserVolume);
                 }
                 // For file playback, Audio library handles looping automatically
             }
@@ -325,6 +333,42 @@ void loop() {
 
             // Force display update to return to clock
             lastUpdate = 0;
+        }
+    }
+
+    // Handle serial commands for debugging
+    if (Serial.available()) {
+        String command = Serial.readStringUntil('\n');
+        command.trim();
+
+        if (command.startsWith("b")) {
+            // Brightness command: b0 to b100
+            int brightness = command.substring(1).toInt();
+            if (brightness >= 0 && brightness <= 100) {
+                frontlightManager.setBrightness(brightness);
+                Serial.printf(">>> SERIAL: Set brightness to %d%%\n", brightness);
+            } else {
+                Serial.println(">>> SERIAL: ERROR - Brightness must be 0-100");
+            }
+        } else if (command.startsWith("v")) {
+            // Volume command: v0 to v100
+            int volume = command.substring(1).toInt();
+            if (volume >= 0 && volume <= 100) {
+                audioObj.setVolume(volume);
+                Serial.printf(">>> SERIAL: Set volume to %d%%\n", volume);
+            } else {
+                Serial.println(">>> SERIAL: ERROR - Volume must be 0-100");
+            }
+        } else if (command == "restart" || command == "r") {
+            Serial.println(">>> SERIAL: Restarting ESP32...");
+            delay(500);
+            ESP.restart();
+        } else if (command == "help") {
+            Serial.println(">>> SERIAL COMMANDS:");
+            Serial.println("  b<0-100>  - Set brightness (e.g., b50 for 50%)");
+            Serial.println("  v<0-100>  - Set volume (e.g., v75 for 75%)");
+            Serial.println("  restart   - Restart ESP32 (clears BLE cache)");
+            Serial.println("  help      - Show this help message");
         }
     }
 
