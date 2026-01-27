@@ -376,11 +376,11 @@ void setup() {
         Serial.println("Audio initialized!");
 
         // Create dedicated FreeRTOS task for continuous MP3 decoding
-        // Task name: "AudioTask", Stack: 4KB, Priority: 2 (higher than idle)
+        // Task name: "AudioTask", Stack: 8KB, Priority: 2 (higher than idle)
         xTaskCreate(
             audioTask,      // Task function
             "AudioTask",    // Task name (for debugging)
-            4096,           // Stack size (4KB)
+            8192,           // Stack size (8KB) - increased from 4KB to prevent stack overflow
             NULL,           // Task parameters (none)
             2,              // Priority (2 = above normal, below critical tasks)
             NULL            // Task handle (not needed)
