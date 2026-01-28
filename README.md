@@ -1,4 +1,5 @@
-# ESP32-L Alarm Clock
+# B.O.M.B. (Bluetooth Optimized Morning Bell)
+### *Non-explosive*
 
 A phone-independent alarm clock built with ESP32 microcontroller, featuring a low-power 3.7" e-ink display, custom alarm sounds, and wireless configuration via companion iOS app.
 
@@ -39,7 +40,7 @@ See [src/config.h](src/config.h) for complete configuration.
 ## Project Structure
 
 ```
-alarm-clock/
+B.O.M.B./
 ├── platformio.ini          # PlatformIO configuration
 ├── src/                    # ESP32 firmware
 │   ├── main.cpp           # Main program loop
@@ -78,8 +79,8 @@ alarm-clock/
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/allanilya/alarm-clock.git
-   cd alarm-clock
+   git clone https://github.com/allanilya/B.O.M.B
+   cd B.O.M.B.
    ```
 
 2. Build and upload firmware:
