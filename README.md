@@ -1,7 +1,7 @@
 # B.O.M.B. (Bluetooth Optimized Morning Bell)
 ### ESP32 alarm clock with IOS app
 
-A phone-independent alarm clock built with ESP32 microcontroller, featuring a low-power 3.7" e-ink display, custom alarm sounds, and wireless configuration via companion iOS app.
+An alarm clock built with ESP32 microcontroller, featuring a low-power 3.7" e-ink display, custom alarm sounds, and wireless configuration via companion iOS app.
 
 ## Motivation
 
